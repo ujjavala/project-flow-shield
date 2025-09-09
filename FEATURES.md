@@ -11,6 +11,118 @@ This is the **world's first AI-enhanced OAuth2 authentication system** built on 
 - **Distributed Sagas**: Enterprise transaction patterns with compensation
 - **Production-Ready AI**: Graceful fallbacks and comprehensive testing
 
+## 🚀 Latest Features Added
+
+### 🛡️ **Admin Fraud Observability Dashboard** 
+*(NEW - Comprehensive fraud detection monitoring)*
+
+**🔍 Real-time Fraud Analytics:**
+- **Live fraud event monitoring** with AI-powered risk scoring
+- **Interactive analytics dashboard** with React components
+- **Temporal-powered data aggregation** for reliability
+- **Risk distribution visualization** and trend analysis
+- **Top risk factors analysis** with actionable insights
+- **High-risk event alerting** with email masking for privacy
+
+**📊 AI Model Performance Monitoring:**
+- **Ollama AI model health** and response time tracking
+- **Fallback provider metrics** when primary AI is unavailable
+- **Success rate monitoring** across all AI requests
+- **Performance benchmarking** with millisecond precision
+
+**🔄 Temporal-Powered Analytics:**
+- **Durable data processing** - never lose analytics data
+- **Child workflow orchestration** for complex aggregations  
+- **Search attributes** for easy workflow discovery
+- **Continue-as-new pattern** for long-running analytics
+
+### 📧 **Temporal-Powered Email System**
+*(NEW - Enterprise-grade email delivery with AI personalization)*
+
+**⚡ Intelligent Email Workflows:**
+- **Temporal email workflows** with retry logic and fallback strategies
+- **AI-personalized content** using Ollama for email optimization
+- **Multi-provider fallback** (SMTP → Console → Log verification links)
+- **Rate limiting and security** checks for password reset emails
+- **Delivery tracking** and analytics integration
+
+**🎨 Beautiful Email Templates:**
+- **HTML email templates** with gradient backgrounds and modern design
+- **Security-focused layouts** for password reset notifications
+- **Responsive design** that works across all email clients
+- **Brand consistency** with OAuth2 Auth Service styling
+
+**🔒 Security Features:**
+- **Rate limiting** for password reset attempts (per email & IP)
+- **IP address tracking** in password reset notifications
+- **Fraud detection integration** - AI validates email requests
+- **Audit trail** for all email delivery attempts
+
+**🚨 Graceful Fallbacks:**
+```bash
+# SMTP configured → Beautiful HTML emails delivered
+# SMTP unavailable → Console delivery with formatting  
+# All providers down → Verification links logged for manual access
+```
+
+## 🎯 Quick Usage Guide for New Features
+
+### 📊 **Access Admin Dashboard**
+```bash
+# 1. Start the system
+docker-compose -f docker-compose.ai.yml up -d
+
+# 2. Register a user to generate sample data  
+curl -X POST "http://localhost:8000/user/register" \
+  -H "Content-Type: application/json" \
+  -d '{"email": "admin@example.com", "password": "SecurePass123!"}'
+
+# 3. Open admin dashboard (add to frontend)
+# Navigate to /admin in your React app for fraud analytics
+
+# 4. View Temporal workflows
+open http://localhost:8081  # Temporal UI shows email & analytics workflows
+```
+
+### 📧 **Email System in Action**
+```bash
+# Registration with email workflow
+curl -X POST "http://localhost:8000/user/register" \
+  -H "Content-Type: application/json" \
+  -d '{"email": "test@example.com", "password": "Test123!", "first_name": "John"}'
+
+# Check logs for verification link (when SMTP not configured)
+docker-compose -f docker-compose.ai.yml logs backend | grep "Verification link"
+
+# Setup SMTP for real email delivery (optional)
+export SMTP_USERNAME="your-smtp-username"
+export SMTP_PASSWORD="your-smtp-password"
+# Restart backend to pick up SMTP settings
+```
+
+### 🤖 **AI Features & Analytics**
+```bash
+# Test AI fraud detection
+curl -X POST "http://localhost:8000/ai/test-fraud-detection" \
+  -H "Content-Type: application/json" \
+  -d '{"email": "suspicious@guerrillamail.com", "password": "weak123"}'
+
+# View fraud analytics
+curl "http://localhost:8000/admin/fraud-analytics?hours=24"
+
+# Generate sample fraud events for testing
+curl -X POST "http://localhost:8000/admin/fraud-events/simulate?count=10"
+
+# Monitor real-time events
+curl "http://localhost:8000/admin/fraud-events/realtime?limit=5"
+```
+
+### 🔍 **Temporal Workflow Monitoring**
+- **Analytics Workflows**: Search for `FraudAnalyticsWorkflow` in Temporal UI
+- **Email Workflows**: Search for `EmailVerificationWorkflow` or `PasswordResetEmailWorkflow`
+- **Search Attributes**: Filter by `recipient`, `email_type`, or `correlation_id`
+- **Metrics**: View processing times and retry attempts in workflow history
+
 ## 🤖 AI-Enhanced Core Features
 
 ### 1. 🧠 **AI-Powered User Registration**

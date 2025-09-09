@@ -17,8 +17,8 @@ open http://localhost:8000/docs   # API documentation
 
 # 3. Test the system  
 # Register → john@example.com / SecurePass123!
-# Check logs for verification link: docker-compose logs backend
-# Login and explore the dashboard!
+# Check logs for verification link: docker-compose logs backend | grep "Verification link"
+# Use the verification link to verify your account, then login!
 
 # 4. Verify Temporal + AI is working
 curl http://localhost:8000/temporal-status           # Check connection
