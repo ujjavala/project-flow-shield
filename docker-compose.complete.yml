@@ -1,5 +1,14 @@
 version: '3.8'
 
+# 🚀 Complete AI-Powered Authentication System
+# Single Docker Compose setup with everything included:
+# - PostgreSQL Database
+# - Redis Cache for AI models  
+# - Temporal Server & UI
+# - AI-Enhanced Backend with Ollama integration
+# - React Frontend
+# - Ollama AI Server for local AI capabilities
+
 services:
   # PostgreSQL Database
   postgres:
@@ -7,7 +16,7 @@ services:
     environment:
       POSTGRES_DB: oauth2_auth
       POSTGRES_USER: oauth2_user
-      POSTGRES_PASSWORD: oauth2_password
+      POSTGRES_PASSWORD: oauth2_password_change_in_production
     ports:
       - "5432:5432"
     volumes:
@@ -19,9 +28,10 @@ services:
       timeout: 5s
       retries: 5
     networks:
-      - temporal-auth-network
+      - auth-network
+    restart: unless-stopped
 
-  # Redis for AI model caching and real-time features
+  # Redis for AI model caching
   redis:
     image: redis:7-alpine
     ports:
@@ -35,7 +45,8 @@ services:
       timeout: 3s
       retries: 5
     networks:
-      - temporal-auth-network
+      - auth-network
+    restart: unless-stopped
 
   # Temporal Server
   temporal:
@@ -46,7 +57,7 @@ services:
       - DB=postgres12
       - DB_PORT=5432
       - POSTGRES_USER=oauth2_user
-      - POSTGRES_PWD=oauth2_password
+      - POSTGRES_PWD=oauth2_password_change_in_production
       - POSTGRES_SEEDS=postgres
       - POSTGRES_DB=temporal
     depends_on:
@@ -58,7 +69,8 @@ services:
       timeout: 5s
       retries: 5
     networks:
-      - temporal-auth-network
+      - auth-network
+    restart: unless-stopped
 
   # Temporal Web UI
   temporal-ui:
@@ -72,18 +84,54 @@ services:
       temporal:
         condition: service_healthy
     networks:
-      - temporal-auth-network
+      - auth-network
+    restart: unless-stopped
 
-  # FastAPI Backend with AI/ML capabilities
+  # Ollama AI Server (Local AI)
+  ollama:
+    image: ollama/ollama:latest
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    environment:
+      - OLLAMA_MODELS=llama3,phi3,mistral
+    networks:
+      - auth-network
+    restart: unless-stopped
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    profiles:
+      - gpu
+    
+  # Ollama CPU version (fallback)
+  ollama-cpu:
+    image: ollama/ollama:latest
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    networks:
+      - auth-network
+    restart: unless-stopped
+    profiles:
+      - cpu
+
+  # AI-Enhanced FastAPI Backend
   backend:
     build:
       context: ./backend
-      dockerfile: Dockerfile.ai
+      dockerfile: Dockerfile
     ports:
       - "8000:8000"
     environment:
       # Database
-      - DATABASE_URL=postgresql://oauth2_user:oauth2_password@postgres:5432/oauth2_auth
+      - DATABASE_URL=postgresql://oauth2_user:oauth2_password_change_in_production@postgres:5432/oauth2_auth
       
       # JWT Configuration
       - JWT_SECRET_KEY=your-super-secret-jwt-key-change-in-production
@@ -94,8 +142,8 @@ services:
       # Email Configuration (configure with your SMTP provider)
       - SMTP_SERVER=smtp.gmail.com
       - SMTP_PORT=587
-      - SMTP_USERNAME=your-email@gmail.com
-      - SMTP_PASSWORD=your-app-password
+      - SMTP_USERNAME=${SMTP_USERNAME:-}
+      - SMTP_PASSWORD=${SMTP_PASSWORD:-}
       
       # OAuth2 Configuration
       - OAUTH2_CLIENT_ID=oauth2-client
@@ -115,11 +163,13 @@ services:
       - REDIS_HOST=redis
       - REDIS_PORT=6379
       
-      # AI/ML Configuration (optional - system works without these)
+      # AI Configuration (all optional)
+      - OLLAMA_HOST=ollama
+      - OLLAMA_PORT=11434
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
       
-      # AI Model Settings
+      # AI Settings
       - AI_MODEL_CACHE_TTL=86400
       - AI_FALLBACK_ENABLED=true
       - AI_CONFIDENCE_THRESHOLD=0.7
@@ -139,23 +189,27 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
+      start_period: 40s
     networks:
-      - temporal-auth-network
+      - auth-network
+    restart: unless-stopped
 
   # Temporal Worker with AI capabilities
   worker:
     build:
       context: ./backend
-      dockerfile: Dockerfile.ai
+      dockerfile: Dockerfile
     environment:
       # Same environment as backend
-      - DATABASE_URL=postgresql://oauth2_user:oauth2_password@postgres:5432/oauth2_auth
+      - DATABASE_URL=postgresql://oauth2_user:oauth2_password_change_in_production@postgres:5432/oauth2_auth
       - JWT_SECRET_KEY=your-super-secret-jwt-key-change-in-production
       - TEMPORAL_HOST=temporal
       - TEMPORAL_PORT=7233
       - TEMPORAL_NAMESPACE=default
       - REDIS_HOST=redis
       - REDIS_PORT=6379
+      - OLLAMA_HOST=ollama
+      - OLLAMA_PORT=11434
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
       - AI_MODEL_CACHE_TTL=86400
@@ -174,7 +228,8 @@ services:
         condition: service_healthy
     command: ["python", "worker.py"]
     networks:
-      - temporal-auth-network
+      - auth-network
+    restart: unless-stopped
 
   # React Frontend
   frontend:
@@ -186,6 +241,7 @@ services:
     environment:
       - REACT_APP_API_URL=http://localhost:8000
       - REACT_APP_TEMPORAL_UI_URL=http://localhost:8081
+      - REACT_APP_AI_ENABLED=true
       - CHOKIDAR_USEPOLLING=true
     volumes:
       - ./frontend/src:/app/src
@@ -194,13 +250,74 @@ services:
       backend:
         condition: service_healthy
     networks:
-      - temporal-auth-network
+      - auth-network
+    restart: unless-stopped
+
+  # Model Initialization Service (downloads AI models)
+  model-init:
+    image: ollama/ollama:latest
+    volumes:
+      - ollama_data:/root/.ollama
+    networks:
+      - auth-network
+    command: >
+      sh -c "
+        echo 'Initializing AI models...' &&
+        ollama serve &
+        sleep 10 &&
+        echo 'Downloading llama3 model...' &&
+        ollama pull llama3 &&
+        echo 'Downloading phi3 model...' &&
+        ollama pull phi3 &&
+        echo 'Models downloaded successfully!' &&
+        sleep 5
+      "
+    profiles:
+      - init
 
 networks:
-  temporal-auth-network:
+  auth-network:
     driver: bridge
 
 volumes:
   postgres_data:
+    driver: local
   redis_data:
-  ai_models:  # Volume for AI model storage and caching
+    driver: local
+  ai_models:
+    driver: local
+  ollama_data:
+    driver: local
+
+# 🚀 Usage Instructions:
+#
+# 1. Basic Setup (CPU-only):
+#    docker-compose -f docker-compose.complete.yml --profile cpu up -d
+#
+# 2. GPU-Enabled Setup (if NVIDIA GPU available):
+#    docker-compose -f docker-compose.complete.yml --profile gpu up -d
+#
+# 3. Initialize AI models (run once):
+#    docker-compose -f docker-compose.complete.yml --profile init run model-init
+#
+# 4. Full system with model initialization:
+#    docker-compose -f docker-compose.complete.yml --profile cpu --profile init up -d
+#
+# 5. Environment variables (.env file):
+#    Create .env file with:
+#    OPENAI_API_KEY=your-openai-key
+#    ANTHROPIC_API_KEY=your-anthropic-key
+#    SMTP_USERNAME=your-email@gmail.com
+#    SMTP_PASSWORD=your-app-password
+#
+# 6. Access points:
+#    - Frontend: http://localhost:3000
+#    - Backend API: http://localhost:8000
+#    - API Docs: http://localhost:8000/docs
+#    - Temporal UI: http://localhost:8081
+#    - AI Health: http://localhost:8000/ai/health
+#    - Ollama: http://localhost:11434
+#
+# 7. Test AI features:
+#    curl http://localhost:8000/ai/test-password-analysis
+#    curl http://localhost:8000/ai/test-fraud-detection

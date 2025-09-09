@@ -20,15 +20,13 @@ const ResetPassword = () => {
 
   const password = watch('password');
 
-
   const handlePasswordResetRequest = async (data) => {
     setLoading(true);
-    setRequestError('');
     try {
       await requestPasswordReset(data.email);
       setIsRequestMode(false);
     } catch (error) {
-      setRequestError(error.message || 'Failed to send reset link. Please try again.');
+      // Error handled in AuthContext
     } finally {
       setLoading(false);
     }
@@ -40,7 +38,7 @@ const ResetPassword = () => {
       await resetPassword(token, data.password);
       navigate('/login');
     } catch (error) {
-      setRequestError(error.message || 'Failed to reset password. Please try again.');
+      // Error handled in AuthContext
     } finally {
       setLoading(false);
     }

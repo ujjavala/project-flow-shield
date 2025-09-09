@@ -31,7 +31,6 @@ textblob>=0.17.0
 
 # Anomaly detection
 pyod>=1.1.0
-isolation-forest>=0.1.0
 
 # Graph analysis for fraud networks
 networkx>=3.1.0

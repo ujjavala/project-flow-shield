@@ -5,13 +5,22 @@ from fastapi.responses import JSONResponse
 from contextlib import asynccontextmanager
 import logging
 
+# Configure logging first
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
 from app.config import settings
 from app.database.connection import init_db
 from app.api import user, oauth
 
-# Configure logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+# Import AI endpoints (simple version that works with current setup)
+try:
+    from app.api import ai_simple
+    AI_AVAILABLE = True
+    logger.info("AI endpoints available")
+except ImportError as e:
+    AI_AVAILABLE = False
+    logger.warning(f"AI endpoints not available: {e}")
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/token")
 
@@ -132,6 +141,13 @@ async def temporal_ping(message: str = "Hello Temporal!"):
 # Include routers
 app.include_router(user.router, prefix="/user", tags=["user"])
 app.include_router(oauth.router, prefix="/oauth", tags=["oauth2"])
+
+# Include AI router if available
+if AI_AVAILABLE:
+    app.include_router(ai_simple.router, tags=["ai"])
+    logger.info("AI endpoints registered")
+else:
+    logger.warning("AI endpoints not registered - check dependencies")
 
 @app.get("/")
 async def root():
