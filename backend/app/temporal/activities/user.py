@@ -1,5 +1,4 @@
 from temporalio import activity
-from dataclasses import dataclass
 from typing import Optional
 import logging
 from datetime import datetime
@@ -7,27 +6,10 @@ from datetime import datetime
 from app.database.connection import AsyncSessionLocal
 from app.models.user import User
 from app.utils.security import hash_password
+from app.temporal.types import UserCreateData, UserUpdateData
 from sqlalchemy import select
 
 logger = logging.getLogger(__name__)
-
-@dataclass
-class UserCreateData:
-    email: str
-    password: str
-    first_name: Optional[str] = None
-    last_name: Optional[str] = None
-    username: Optional[str] = None
-
-@dataclass
-class UserUpdateData:
-    user_id: str
-    email: Optional[str] = None
-    first_name: Optional[str] = None
-    last_name: Optional[str] = None
-    username: Optional[str] = None
-    is_verified: Optional[bool] = None
-    is_active: Optional[bool] = None
 
 class UserActivities:
     

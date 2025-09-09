@@ -11,7 +11,8 @@ from app.database.connection import get_db
 from app.models.user import User, RefreshToken
 from app.utils.security import verify_password, create_access_token, create_refresh_token, verify_token
 from app.temporal.client import get_temporal_client
-from app.temporal.workflows.user_registration import UserRegistrationWorkflow, RegistrationRequest, EmailVerificationWorkflow
+from app.temporal.workflows.user_registration import UserRegistrationWorkflow, EmailVerificationWorkflow
+from app.temporal.types import RegistrationRequest
 from app.temporal.workflows.password_reset import PasswordResetWorkflow, PasswordResetRequest, PasswordResetConfirmationWorkflow, PasswordResetConfirmation
 from app.config import settings
 
@@ -64,43 +65,8 @@ async def register(
                 detail="User with this email already exists"
             )
         
-        # Try Temporal workflow first, fallback to direct registration
-        try:
-            temporal_client = await get_temporal_client()
-            
-            registration_request = RegistrationRequest(
-                email=user_data.email,
-                password=user_data.password,
-                first_name=user_data.first_name,
-                last_name=user_data.last_name,
-                username=user_data.username
-            )
-            
-            workflow_result = await temporal_client.execute_workflow(
-                UserRegistrationWorkflow.run,
-                registration_request,
-                id=f"user-registration-{user_data.email}-{datetime.utcnow().timestamp()}",
-                task_queue="oauth2-task-queue",
-                execution_timeout=timedelta(seconds=30)
-            )
-            
-            if workflow_result["success"]:
-                logger.info(f"User registered via Temporal workflow: {user_data.email}")
-                return {
-                    "success": True,
-                    "user_id": workflow_result["user_id"],
-                    "email": workflow_result["email"],
-                    "message": workflow_result["message"],
-                    "verification_email_sent": workflow_result.get("verification_email_sent", False),
-                    "method": "temporal_workflow"
-                }
-            else:
-                logger.warning(f"Temporal workflow failed: {workflow_result.get('error')}")
-                # Fall through to direct registration
-                
-        except Exception as temporal_error:
-            logger.warning(f"Temporal workflow unavailable: {temporal_error}")
-            # Fall through to direct registration
+        # Skip Temporal workflow for now - use direct registration
+        logger.info(f"Using direct registration for {user_data.email}")
         
         # Direct registration fallback
         from app.utils.security import hash_password, generate_verification_token
@@ -130,12 +96,10 @@ async def register(
         
         # Send verification email using Temporal workflow
         try:
-            from app.temporal.client import get_temporal_client
+            temporal_client = await get_temporal_client()
             from app.temporal.workflows.email_workflow import send_verification_email_workflow
-            
-            client = await get_temporal_client()
             email_result = await send_verification_email_workflow(
-                client,
+                temporal_client,
                 email=user_data.email,
                 token=verification_token,
                 user_name=user_data.first_name or user_data.username
@@ -309,7 +273,7 @@ async def request_password_reset(
                 reset_request,
                 id=f"password-reset-{request_data.email}-{datetime.utcnow().timestamp()}",
                 task_queue="oauth2-task-queue",
-                execution_timeout=timedelta(seconds=30)
+                execution_timeout=timedelta(seconds=5)
             )
             
             logger.info(f"Password reset requested via Temporal workflow for: {request_data.email}")
@@ -365,7 +329,7 @@ async def confirm_password_reset(
                 reset_confirmation,
                 id=f"password-reset-confirm-{reset_data.token}-{datetime.utcnow().timestamp()}",
                 task_queue="oauth2-task-queue",
-                execution_timeout=timedelta(seconds=30)
+                execution_timeout=timedelta(seconds=5)
             )
             
             if workflow_result["success"]:
@@ -434,7 +398,7 @@ async def verify_email(
                 verification_data.token,
                 id=f"email-verification-{verification_data.token}-{datetime.utcnow().timestamp()}",
                 task_queue="oauth2-task-queue",
-                execution_timeout=timedelta(seconds=30)
+                execution_timeout=timedelta(seconds=5)
             )
             
             if workflow_result["success"]:

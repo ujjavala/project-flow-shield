@@ -53,20 +53,67 @@ async def create_worker() -> Worker:
             EmailVerificationWorkflow, 
             PasswordResetEmailWorkflow
         )
+        from app.temporal.workflows.password_reset import (
+            PasswordResetWorkflow,
+            PasswordResetConfirmationWorkflow
+        )
+        from app.temporal.workflows.user_registration import (
+            UserRegistrationWorkflow,
+            EmailVerificationWorkflow as UserEmailVerificationWorkflow
+        )
         from app.temporal.activities.email_activities import email_activities
+        from app.temporal.activities.user import UserActivities
+        from app.temporal.activities.auth import AuthActivities
+        from app.temporal.activities.ai_auth import AIAuthActivities
+        from app.temporal.activities.email import EmailActivities
         
         email_workflows = [
             EmailDeliveryWorkflow,
-            EmailVerificationWorkflow,
-            PasswordResetEmailWorkflow
+            PasswordResetEmailWorkflow,
+            PasswordResetWorkflow,
+            PasswordResetConfirmationWorkflow,
+            UserRegistrationWorkflow,
+            UserEmailVerificationWorkflow
         ]
+        
+        # Initialize activity instances
+        user_activities = UserActivities()
+        auth_activities = AuthActivities()  
+        ai_auth_activities = AIAuthActivities()
+        simple_email_activities = EmailActivities()
+        
         email_activities_list = [
+            # Email activities
             email_activities.send_smtp_email,
             email_activities.send_console_email,
             email_activities.log_verification_link,
             email_activities.check_password_reset_rate_limit,
             email_activities.record_email_metric,
-            email_activities.record_security_event
+            email_activities.record_security_event,
+            # Simple email activities
+            simple_email_activities.send_verification_email,
+            simple_email_activities.send_password_reset_email,
+            simple_email_activities.send_welcome_email,
+            # User activities
+            user_activities.create_user,
+            user_activities.update_user,
+            user_activities.verify_user_email,
+            user_activities.set_password_reset_token,
+            user_activities.reset_user_password,
+            # Auth activities
+            auth_activities.generate_verification_token,
+            auth_activities.generate_password_reset_token,
+            auth_activities.validate_password_reset_token,
+            auth_activities.generate_oauth_authorization_code,
+            auth_activities.exchange_authorization_code,
+            auth_activities.revoke_access_token,
+            # AI Auth activities
+            ai_auth_activities.analyze_registration_fraud_risk,
+            ai_auth_activities.adaptive_authentication_challenge,
+            ai_auth_activities.analyze_password_security_ai,
+            ai_auth_activities.detect_account_takeover,
+            ai_auth_activities.optimize_email_delivery_strategy,
+            ai_auth_activities.analyze_verification_behavior
         ]
         logger.info("Email workflows and activities loaded")
     except ImportError as e:
