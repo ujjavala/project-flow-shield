@@ -127,14 +127,38 @@ async def register(
         await db.refresh(new_user)
         
         logger.info(f"User registered directly: {user_data.email}")
-        logger.info(f"Verification link: http://localhost:3000/verify-email?token={verification_token}")
+        
+        # Send verification email using Temporal workflow
+        try:
+            from app.temporal.client import get_temporal_client
+            from app.temporal.workflows.email_workflow import send_verification_email_workflow
+            
+            client = await get_temporal_client()
+            email_result = await send_verification_email_workflow(
+                client,
+                email=user_data.email,
+                token=verification_token,
+                user_name=user_data.first_name or user_data.username
+            )
+            
+            logger.info(f"Verification email workflow completed for {user_data.email}: {email_result['verification_email_sent']}")
+            verification_email_sent = email_result["verification_email_sent"]
+            
+            # If email delivery failed but we got a verification link, log it
+            if not verification_email_sent and email_result.get("verification_link"):
+                logger.info(f"Verification link: {email_result['verification_link']}")
+                
+        except Exception as e:
+            logger.warning(f"Temporal email workflow unavailable: {e}")
+            logger.info(f"Verification link: http://localhost:3000/verify-email?token={verification_token}")
+            verification_email_sent = False
         
         return {
             "success": True,
             "user_id": new_user.id,
             "email": new_user.email,
             "message": "Registration successful. Please check your email to verify your account.",
-            "verification_email_sent": False,
+            "verification_email_sent": verification_email_sent,
             "method": "direct_registration"
         }
         

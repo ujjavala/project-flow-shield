@@ -149,6 +149,14 @@ if AI_AVAILABLE:
 else:
     logger.warning("AI endpoints not registered - check dependencies")
 
+# Include Admin Analytics router
+try:
+    from app.api import admin_analytics
+    app.include_router(admin_analytics.router, tags=["admin-analytics"])
+    logger.info("Admin analytics endpoints registered")
+except ImportError as e:
+    logger.warning(f"Admin analytics endpoints not available: {e}")
+
 @app.get("/")
 async def root():
     return {
