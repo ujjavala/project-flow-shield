@@ -25,6 +25,32 @@ class UserRegistrationWorkflow:
         """Execute user registration workflow"""
         
         try:
+            # Step 0: AI-powered pre-registration checks
+            workflow.upsert_search_attributes({
+                WORKFLOW_STATUS_SEARCH_ATTRIBUTE: "fraud_detection"
+            })
+            
+            fraud_analysis = await workflow.execute_activity(
+                "analyze_registration_fraud_risk",
+                registration_data.to_dict(),
+                start_to_close_timeout=timedelta(seconds=30),
+                retry_policy=RetryPolicy(
+                    initial_interval=timedelta(seconds=1),
+                    maximum_interval=timedelta(seconds=10),
+                    maximum_attempts=3,
+                    backoff_coefficient=2.0
+                )
+            )
+            
+            fraud_score = fraud_analysis.get("fraud_score", 0.0)
+            
+            # Block high-risk registrations
+            if fraud_score > 0.8:
+                workflow.upsert_search_attributes({
+                    WORKFLOW_STATUS_SEARCH_ATTRIBUTE: "blocked_fraud"
+                })
+                raise UserRegistrationError(f"Registration blocked due to high fraud risk: {fraud_score}")
+            
             # Step 1: Generate verification token
             token_result = await workflow.execute_activity(
                 "generate_verification_token",
