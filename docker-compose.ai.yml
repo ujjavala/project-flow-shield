@@ -1,0 +1,206 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15
+    environment:
+      POSTGRES_DB: oauth2_auth
+      POSTGRES_USER: oauth2_user
+      POSTGRES_PASSWORD: oauth2_password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./backend/app/database/init.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U oauth2_user -d oauth2_auth"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - temporal-auth-network
+
+  # Redis for AI model caching and real-time features
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - temporal-auth-network
+
+  # Temporal Server
+  temporal:
+    image: temporalio/auto-setup:latest
+    ports:
+      - "7233:7233"
+    environment:
+      - DB=postgresql
+      - DB_PORT=5432
+      - POSTGRES_USER=oauth2_user
+      - POSTGRES_PWD=oauth2_password
+      - POSTGRES_SEEDS=postgres
+      - POSTGRES_DB=temporal
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "temporal", "workflow", "list", "--address", "temporal:7233"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - temporal-auth-network
+
+  # Temporal Web UI
+  temporal-ui:
+    image: temporalio/ui:latest
+    ports:
+      - "8081:8080"
+    environment:
+      - TEMPORAL_ADDRESS=temporal:7233
+      - TEMPORAL_CORS_ORIGINS=http://localhost:3000
+    depends_on:
+      temporal:
+        condition: service_healthy
+    networks:
+      - temporal-auth-network
+
+  # FastAPI Backend with AI/ML capabilities
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.ai
+    ports:
+      - "8000:8000"
+    environment:
+      # Database
+      - DATABASE_URL=postgresql://oauth2_user:oauth2_password@postgres:5432/oauth2_auth
+      
+      # JWT Configuration
+      - JWT_SECRET_KEY=your-super-secret-jwt-key-change-in-production
+      - JWT_ALGORITHM=HS256
+      - JWT_ACCESS_TOKEN_EXPIRE_MINUTES=30
+      - JWT_REFRESH_TOKEN_EXPIRE_DAYS=7
+      
+      # Email Configuration (configure with your SMTP provider)
+      - SMTP_SERVER=smtp.gmail.com
+      - SMTP_PORT=587
+      - SMTP_USERNAME=your-email@gmail.com
+      - SMTP_PASSWORD=your-app-password
+      
+      # OAuth2 Configuration
+      - OAUTH2_CLIENT_ID=oauth2-client
+      - OAUTH2_CLIENT_SECRET=oauth2-client-secret
+      - OAUTH2_REDIRECT_URI=http://localhost:3000/callback
+      
+      # URLs
+      - FRONTEND_URL=http://localhost:3000
+      - BACKEND_URL=http://localhost:8000
+      
+      # Temporal Configuration
+      - TEMPORAL_HOST=temporal
+      - TEMPORAL_PORT=7233
+      - TEMPORAL_NAMESPACE=default
+      
+      # Redis Configuration for AI model caching
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      
+      # AI/ML Configuration (optional - system works without these)
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      
+      # AI Model Settings
+      - AI_MODEL_CACHE_TTL=86400
+      - AI_FALLBACK_ENABLED=true
+      - AI_CONFIDENCE_THRESHOLD=0.7
+      
+    volumes:
+      - ./backend:/app
+      - ai_models:/app/models
+    depends_on:
+      postgres:
+        condition: service_healthy
+      temporal:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - temporal-auth-network
+
+  # Temporal Worker with AI capabilities
+  worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.ai
+    environment:
+      # Same environment as backend
+      - DATABASE_URL=postgresql://oauth2_user:oauth2_password@postgres:5432/oauth2_auth
+      - JWT_SECRET_KEY=your-super-secret-jwt-key-change-in-production
+      - TEMPORAL_HOST=temporal
+      - TEMPORAL_PORT=7233
+      - TEMPORAL_NAMESPACE=default
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - AI_MODEL_CACHE_TTL=86400
+      - AI_FALLBACK_ENABLED=true
+    volumes:
+      - ./backend:/app
+      - ai_models:/app/models
+    depends_on:
+      postgres:
+        condition: service_healthy
+      temporal:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      backend:
+        condition: service_healthy
+    command: ["python", "worker.py"]
+    networks:
+      - temporal-auth-network
+
+  # React Frontend
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      - REACT_APP_API_URL=http://localhost:8000
+      - REACT_APP_TEMPORAL_UI_URL=http://localhost:8081
+      - CHOKIDAR_USEPOLLING=true
+    volumes:
+      - ./frontend/src:/app/src
+      - ./frontend/public:/app/public
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - temporal-auth-network
+
+networks:
+  temporal-auth-network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  redis_data:
+  ai_models:  # Volume for AI model storage and caching
