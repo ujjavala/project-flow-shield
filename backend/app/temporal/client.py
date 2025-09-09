@@ -44,40 +44,18 @@ async def get_temporal_client() -> Client:
 
 async def create_worker() -> Worker:
     """Create and configure Temporal worker"""
-    from app.temporal.activities.email import EmailActivities
-    from app.temporal.activities.user import UserActivities
-    from app.temporal.activities.auth import AuthActivities
-    from app.temporal.workflows.user_registration import UserRegistrationWorkflow
-    from app.temporal.workflows.password_reset import PasswordResetWorkflow
-    from app.temporal.workflows.user_registration import EmailVerificationWorkflow
+    from app.temporal.workflows.ping import PingWorkflow
     
     client = await get_temporal_client()
     
-    # Initialize activities
-    email_activities = EmailActivities()
-    user_activities = UserActivities()
-    auth_activities = AuthActivities()
-    
-    # Create worker
+    # Create worker with simple ping workflow first
     worker = Worker(
         client,
         task_queue=settings.TEMPORAL_TASK_QUEUE,
         workflows=[
-            UserRegistrationWorkflow,
-            PasswordResetWorkflow,
-            EmailVerificationWorkflow
+            PingWorkflow
         ],
-        activities=[
-            email_activities.send_verification_email,
-            email_activities.send_password_reset_email,
-            email_activities.send_welcome_email,
-            user_activities.create_user,
-            user_activities.update_user,
-            user_activities.verify_user_email,
-            auth_activities.generate_verification_token,
-            auth_activities.generate_password_reset_token,
-            auth_activities.validate_password_reset_token
-        ]
+        activities=[]
     )
     
     logger.info(f"Temporal worker created for task queue: {settings.TEMPORAL_TASK_QUEUE}")

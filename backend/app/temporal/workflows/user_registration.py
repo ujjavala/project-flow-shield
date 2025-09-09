@@ -4,6 +4,8 @@ from dataclasses import dataclass
 from typing import Optional
 import logging
 
+from app.temporal.activities.user import UserCreateData
+
 logger = logging.getLogger(__name__)
 
 @dataclass
@@ -31,9 +33,7 @@ class UserRegistrationWorkflow:
             
             verification_token = token_result["token"]
             
-            # Step 2: Create user in database
-            from app.temporal.activities.user import UserCreateData
-            
+            # Step 2: Create user in database            
             user_data = UserCreateData(
                 email=registration_data.email,
                 password=registration_data.password,

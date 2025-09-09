@@ -1,6 +1,7 @@
-from fastapi import FastAPI, Depends, HTTPException, status
+from fastapi import FastAPI, Depends, HTTPException, status, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordBearer
+from fastapi.responses import JSONResponse
 from contextlib import asynccontextmanager
 import logging
 
@@ -42,25 +43,91 @@ app.add_middleware(
 
 # Exception handlers
 @app.exception_handler(Exception)
-async def custom_exception_handler(request, exc: Exception):
-    return {
-        "error": exc.__class__.__name__,
-        "message": str(exc),
-        "status_code": status.HTTP_500_INTERNAL_SERVER_ERROR
-    }
+async def custom_exception_handler(request: Request, exc: Exception):
+    logger.error(f"Unhandled exception: {exc}")
+    return JSONResponse(
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        content={
+            "error": exc.__class__.__name__,
+            "message": str(exc),
+            "status_code": status.HTTP_500_INTERNAL_SERVER_ERROR
+        }
+    )
 
 @app.exception_handler(HTTPException)
-async def http_exception_handler(request, exc: HTTPException):
-    return {
-        "error": "HTTPException",
-        "message": exc.detail,
-        "status_code": exc.status_code
-    }
+async def http_exception_handler(request: Request, exc: HTTPException):
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={
+            "error": "HTTPException",
+            "detail": exc.detail,
+            "status_code": exc.status_code
+        }
+    )
 
 # Health check endpoint
 @app.get("/health")
 async def health_check():
     return {"status": "healthy", "service": "oauth2-auth"}
+
+# Temporal status endpoint
+@app.get("/temporal-status")
+async def temporal_status():
+    try:
+        from app.temporal.client import get_temporal_client
+        client = await get_temporal_client()
+        
+        # Try to list workflows to test connection
+        async for workflow in client.list_workflows():
+            # Just test the connection works
+            break
+        
+        return {
+            "temporal_connected": True,
+            "namespace": "default",
+            "temporal_server": settings.TEMPORAL_HOST,
+            "task_queue": settings.TEMPORAL_TASK_QUEUE
+        }
+    except Exception as e:
+        return {
+            "temporal_connected": False,
+            "error": str(e),
+            "temporal_server": settings.TEMPORAL_HOST,
+            "task_queue": settings.TEMPORAL_TASK_QUEUE
+        }
+
+# Temporal ping test endpoint
+@app.post("/temporal-ping")
+async def temporal_ping(message: str = "Hello Temporal!"):
+    try:
+        from app.temporal.client import get_temporal_client
+        from app.temporal.workflows.ping import PingWorkflow, PingRequest
+        from datetime import datetime, timedelta
+        
+        client = await get_temporal_client()
+        
+        ping_request = PingRequest(message=message)
+        
+        result = await client.execute_workflow(
+            PingWorkflow.run,
+            ping_request,
+            id=f"ping-test-{datetime.utcnow().timestamp()}",
+            task_queue=settings.TEMPORAL_TASK_QUEUE,
+            execution_timeout=timedelta(seconds=30)
+        )
+        
+        return {
+            "temporal_working": True,
+            "workflow_result": result,
+            "method": "temporal_workflow"
+        }
+        
+    except Exception as e:
+        return {
+            "temporal_working": False,
+            "error": str(e),
+            "method": "error"
+        }
 
 # Include routers
 app.include_router(user.router, prefix="/user", tags=["user"])

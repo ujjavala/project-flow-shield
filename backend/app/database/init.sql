@@ -14,7 +14,9 @@ CREATE TABLE IF NOT EXISTS  users (
     password_reset_expires TIMESTAMP,
     created_at TIMESTAMP DEFAULT NOW(),
     updated_at TIMESTAMP,
-    last_login TIMESTAMP
+    last_login TIMESTAMP,
+    profile_picture VARCHAR(255),
+    bio TEXT
 );
 
 CREATE TABLE IF NOT EXISTS oauth2_clients (
@@ -62,4 +64,13 @@ CREATE TABLE IF NOT EXISTS  oauth2_access_tokens (
     refresh_token_expires_at TIMESTAMP,
     is_revoked BOOLEAN DEFAULT FALSE,
     created_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS refresh_tokens (
+    id VARCHAR PRIMARY KEY,
+    user_id VARCHAR NOT NULL,
+    token VARCHAR(255) UNIQUE NOT NULL,
+    expires_at TIMESTAMP NOT NULL,
+    created_at TIMESTAMP DEFAULT NOW(),
+    is_revoked BOOLEAN DEFAULT FALSE
 );

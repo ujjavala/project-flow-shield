@@ -7,6 +7,9 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import Login from './components/Login';
 import Register from './components/Register';
 import Dashboard from './components/Dashboard';
+import ResetPassword from './components/ResetPassword';
+import VerifyEmail from './components/VerifyEmail';
+import About from './components/About';
 
 // Styles
 import './styles/App.css';
@@ -66,6 +69,20 @@ function AppContent() {
               </PublicRoute>
             } 
           />
+          <Route 
+            path="/reset-password" 
+            element={
+              <PublicRoute>
+                <ResetPassword />
+              </PublicRoute>
+            } 
+          />
+          <Route 
+            path="/verify-email" 
+            element={
+              <VerifyEmail />
+            } 
+          />
           
           {/* Protected Routes */}
           <Route 
@@ -76,6 +93,9 @@ function AppContent() {
               </ProtectedRoute>
             } 
           />
+          
+          {/* Public Info Routes */}
+          <Route path="/about" element={<About />} />
           
           {/* Default Route */}
           <Route path="/" element={<Navigate to="/dashboard" />} />

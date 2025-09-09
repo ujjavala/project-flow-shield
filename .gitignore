@@ -342,3 +342,6 @@ private/
 
 # Temporal specific
 .temporal/
+
+# Claude specific
+.claude/

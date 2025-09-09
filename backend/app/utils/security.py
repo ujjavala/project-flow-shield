@@ -83,3 +83,31 @@ def generate_authorization_code() -> str:
 def generate_token() -> str:
     """Generate generic secure token"""
     return secrets.token_urlsafe(32)
+
+def generate_verification_token() -> str:
+    """Generate a secure email verification token"""
+    return secrets.token_urlsafe(32)
+
+def generate_reset_token() -> str:
+    """Generate a secure password reset token"""
+    return secrets.token_urlsafe(32)
+
+def generate_access_token_string() -> str:
+    """Generate a secure access token string"""
+    return secrets.token_urlsafe(48)
+
+def generate_refresh_token_string() -> str:
+    """Generate a secure refresh token string"""
+    return secrets.token_urlsafe(48)
+
+def is_strong_password(password: str) -> bool:
+    """Check if password meets strength requirements"""
+    if len(password) < settings.PASSWORD_MIN_LENGTH:
+        return False
+    
+    has_upper = any(c.isupper() for c in password)
+    has_lower = any(c.islower() for c in password)
+    has_digit = any(c.isdigit() for c in password)
+    has_special = any(c in "!@#$%^&*()_+-=[]{}|;:,.<>?" for c in password)
+    
+    return has_upper and has_lower and has_digit and has_special
