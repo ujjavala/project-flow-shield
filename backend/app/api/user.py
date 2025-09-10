@@ -65,8 +65,43 @@ async def register(
                 detail="User with this email already exists"
             )
         
-        # Skip Temporal workflow for now - use direct registration
-        logger.info(f"Using direct registration for {user_data.email}")
+        # Try Temporal workflow first, fallback to direct registration
+        try:
+            temporal_client = await get_temporal_client()
+            
+            registration_request = RegistrationRequest(
+                email=user_data.email,
+                password=user_data.password,
+                first_name=user_data.first_name,
+                last_name=user_data.last_name,
+                username=user_data.username
+            )
+            
+            workflow_result = await temporal_client.execute_workflow(
+                UserRegistrationWorkflow.run,
+                registration_request,
+                id=f"user-registration-{user_data.email}-{datetime.utcnow().timestamp()}",
+                task_queue="oauth2-task-queue",
+                execution_timeout=timedelta(seconds=30)
+            )
+            
+            if workflow_result["success"]:
+                logger.info(f"User registered via Temporal workflow: {user_data.email}")
+                return {
+                    "success": True,
+                    "user_id": workflow_result["user_id"],
+                    "email": workflow_result["email"],
+                    "message": workflow_result["message"],
+                    "verification_email_sent": workflow_result.get("verification_email_sent", False),
+                    "method": "temporal_workflow"
+                }
+            else:
+                logger.warning(f"Temporal workflow failed: {workflow_result.get('error')}")
+                # Fall through to direct registration
+                
+        except Exception as temporal_error:
+            logger.warning(f"Temporal workflow unavailable: {temporal_error}")
+            # Fall through to direct registration
         
         # Direct registration fallback
         from app.utils.security import hash_password, generate_verification_token
@@ -94,28 +129,9 @@ async def register(
         
         logger.info(f"User registered directly: {user_data.email}")
         
-        # Send verification email using Temporal workflow
-        try:
-            temporal_client = await get_temporal_client()
-            from app.temporal.workflows.email_workflow import send_verification_email_workflow
-            email_result = await send_verification_email_workflow(
-                temporal_client,
-                email=user_data.email,
-                token=verification_token,
-                user_name=user_data.first_name or user_data.username
-            )
-            
-            logger.info(f"Verification email workflow completed for {user_data.email}: {email_result['verification_email_sent']}")
-            verification_email_sent = email_result["verification_email_sent"]
-            
-            # If email delivery failed but we got a verification link, log it
-            if not verification_email_sent and email_result.get("verification_link"):
-                logger.info(f"Verification link: {email_result['verification_link']}")
-                
-        except Exception as e:
-            logger.warning(f"Temporal email workflow unavailable: {e}")
-            logger.info(f"Verification link: http://localhost:3000/verify-email?token={verification_token}")
-            verification_email_sent = False
+        # Log verification link for now - skip complex email workflows that are hanging
+        logger.info(f"Verification link: http://localhost:3000/verify-email?token={verification_token}")
+        verification_email_sent = False
         
         return {
             "success": True,
