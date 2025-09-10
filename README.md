@@ -2,6 +2,11 @@
 
 A **production-ready** OAuth2 authentication system that combines **JWT tokens** with **Temporal.io workflows** for enterprise-grade authentication. Features user registration, email verification, password reset, and distributed workflow orchestration.
 
+
+https://github.com/user-attachments/assets/149f30ef-59ac-4369-8288-5a0e3e5774a4
+
+
+
 > **✅ CURRENTLY WORKING**: Simple JWT-based authentication with working login/register functionality. Temporal workflows implemented but require configuration fixes for full integration.
 
 ## ⚡ TL;DR - Quick Run
