@@ -33,3 +33,8 @@ class RegistrationRequest:
         data = asdict(self)
         data.pop('password', None)  # Remove password for security
         return data
+
+@dataclass
+class LoginRequest:
+    email: str
+    password: str

@@ -197,3 +197,115 @@ class AuthActivities:
         except Exception as e:
             logger.error(f"Failed to revoke access token: {e}")
             return False
+    
+    @activity.defn(name="authenticate_user")
+    async def authenticate_user(self, email: str, password: str) -> dict:
+        """Authenticate user credentials for login"""
+        try:
+            from app.database.connection import AsyncSessionLocal
+            from app.models.user import User
+            from app.utils.security import verify_password
+            from sqlalchemy import select
+            
+            async with AsyncSessionLocal() as session:
+                # Find user by email
+                result = await session.execute(
+                    select(User).where(User.email == email)
+                )
+                user = result.scalar_one_or_none()
+                
+                if not user:
+                    logger.warning(f"User not found for login attempt: {email}")
+                    return {
+                        "success": False,
+                        "error": "Invalid credentials"
+                    }
+                
+                # Verify password
+                if not verify_password(password, user.hashed_password):
+                    logger.warning(f"Invalid password for user: {email}")
+                    return {
+                        "success": False,
+                        "error": "Invalid credentials"
+                    }
+                
+                # Check if user is active
+                if not user.is_active:
+                    logger.warning(f"Inactive user attempted login: {email}")
+                    return {
+                        "success": False,
+                        "error": "Account is deactivated"
+                    }
+                
+                logger.info(f"User authenticated successfully: {email}")
+                return {
+                    "success": True,
+                    "user_id": user.id,
+                    "email": user.email,
+                    "is_verified": user.is_verified
+                }
+                
+        except Exception as e:
+            logger.error(f"Authentication failed: {e}")
+            return {
+                "success": False,
+                "error": "Authentication failed"
+            }
+    
+    @activity.defn(name="create_login_tokens")
+    async def create_login_tokens(self, user_id: str, email: str) -> dict:
+        """Create JWT tokens for authenticated user"""
+        try:
+            from app.utils.security import create_access_token, create_refresh_token
+            
+            # Create tokens
+            access_token = create_access_token({"sub": user_id, "email": email})
+            refresh_token = create_refresh_token({"sub": user_id})
+            
+            logger.info(f"Tokens created for user: {email}")
+            return {
+                "access_token": access_token,
+                "refresh_token": refresh_token,
+                "expires_in": settings.JWT_ACCESS_TOKEN_EXPIRE_MINUTES * 60
+            }
+            
+        except Exception as e:
+            logger.error(f"Token creation failed: {e}")
+            raise
+    
+    @activity.defn(name="store_login_session")
+    async def store_login_session(self, user_id: str, refresh_token: str) -> dict:
+        """Store refresh token and update last login"""
+        try:
+            from app.database.connection import AsyncSessionLocal
+            from app.models.user import User, RefreshToken
+            from sqlalchemy import select
+            
+            async with AsyncSessionLocal() as session:
+                # Get user
+                user = await session.get(User, user_id)
+                if not user:
+                    raise ValueError("User not found")
+                
+                # Store refresh token
+                refresh_token_record = RefreshToken(
+                    user_id=user_id,
+                    token=refresh_token,
+                    expires_at=datetime.utcnow() + timedelta(days=settings.JWT_REFRESH_TOKEN_EXPIRE_DAYS)
+                )
+                session.add(refresh_token_record)
+                
+                # Update last login
+                user.last_login = datetime.utcnow()
+                
+                await session.commit()
+                
+                logger.info(f"Login session stored for user: {user.email}")
+                return {
+                    "success": True,
+                    "last_login": user.last_login.isoformat()
+                }
+                
+        except Exception as e:
+            logger.error(f"Failed to store login session: {e}")
+            raise
