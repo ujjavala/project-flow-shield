@@ -1,0 +1,40 @@
+.flowshield-logo {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  filter: drop-shadow(0 0 8px rgba(79, 172, 254, 0.3));
+  transition: all 0.3s ease;
+}
+
+.flowshield-logo:hover {
+  transform: scale(1.05);
+  filter: drop-shadow(0 0 12px rgba(79, 172, 254, 0.5));
+}
+
+.flowshield-logo svg {
+  animation: subtle-pulse 3s ease-in-out infinite alternate;
+}
+
+@keyframes subtle-pulse {
+  0% {
+    filter: brightness(1);
+  }
+  100% {
+    filter: brightness(1.1);
+  }
+}
+
+.flowshield-logo-large {
+  width: 48px;
+  height: 48px;
+}
+
+.flowshield-logo-small {
+  width: 24px;
+  height: 24px;
+}
+
+.flowshield-logo-brand {
+  width: 40px;
+  height: 40px;
+}

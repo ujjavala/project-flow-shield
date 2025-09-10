@@ -1,5 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import './AdminDashboard.css';
+import OverviewTab from './AdminDashboard/tabs/OverviewTab';
+import FraudTab from './AdminDashboard/tabs/FraudTab';
+import ServicesTab from './AdminDashboard/tabs/ServicesTab';
+import UsersTab from './AdminDashboard/tabs/UsersTab';
+import AITab from './AdminDashboard/tabs/AITab';
+import MFATab from './AdminDashboard/tabs/MFATab';
+import FlowShieldLogo from './common/FlowShieldLogo';
+import './common/FlowShieldLogo.css';
 
 const AdminDashboard = () => {
   const [dashboardData, setDashboardData] = useState(null);
@@ -9,6 +17,8 @@ const AdminDashboard = () => {
   const [aiStatus, setAiStatus] = useState(null);
   const [temporalStatus, setTemporalStatus] = useState(null);
   const [fraudAnalytics, setFraudAnalytics] = useState(null);
+  const [mfaAnalytics, setMfaAnalytics] = useState(null);
+  const [securityOverview, setSecurityOverview] = useState(null);
   const [realtimeEvents, setRealtimeEvents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -37,6 +47,8 @@ const AdminDashboard = () => {
         aiResponse,
         temporalResponse,
         fraudAnalyticsResponse,
+        mfaAnalyticsResponse,
+        securityOverviewResponse,
         realtimeEventsResponse
       ] = await Promise.allSettled([
         fetch(`${baseUrl}/admin/health`),
@@ -45,6 +57,8 @@ const AdminDashboard = () => {
         fetch(`${baseUrl}/admin/ai-status`),
         fetch(`${baseUrl}/admin/temporal-status`),
         fetch(`${baseUrl}/admin/fraud-analytics`),
+        fetch(`${baseUrl}/admin/mfa-analytics`),
+        fetch(`${baseUrl}/admin/security-overview`),
         fetch(`${baseUrl}/admin/fraud-events/realtime?limit=20`)
       ]);
 
@@ -70,6 +84,14 @@ const AdminDashboard = () => {
       
       if (fraudAnalyticsResponse.status === 'fulfilled') {
         setFraudAnalytics(await fraudAnalyticsResponse.value.json());
+      }
+      
+      if (mfaAnalyticsResponse.status === 'fulfilled') {
+        setMfaAnalytics(await mfaAnalyticsResponse.value.json());
+      }
+      
+      if (securityOverviewResponse.status === 'fulfilled') {
+        setSecurityOverview(await securityOverviewResponse.value.json());
       }
       
       if (realtimeEventsResponse.status === 'fulfilled') {
@@ -145,8 +167,11 @@ const AdminDashboard = () => {
       {/* Header */}
       <div className="dashboard-header">
         <div className="header-title">
-          <h1>🛡️ Fraud Detection Admin Dashboard</h1>
-          <p>Real-time monitoring and fraud analytics</p>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+            <FlowShieldLogo size={36} />
+            <h1>FlowShield Admin Dashboard</h1>
+          </div>
+          <p>AI-Powered Security Platform • Temporal-Reliable Authentication</p>
         </div>
         
         <div className="header-controls">
@@ -206,6 +231,12 @@ const AdminDashboard = () => {
         >
           🤖 AI System
         </button>
+        <button 
+          className={`tab-button ${activeTab === 'mfa' ? 'active' : ''}`}
+          onClick={() => setActiveTab('mfa')}
+        >
+          <FlowShieldLogo size={18} /> MFA Security
+        </button>
       </div>
 
       {/* Tab Content */}
@@ -215,298 +246,13 @@ const AdminDashboard = () => {
         {activeTab === 'services' && <ServicesTab serviceStatus={serviceStatus} temporalStatus={temporalStatus} />}
         {activeTab === 'users' && <UsersTab userStats={userStats} />}
         {activeTab === 'ai' && <AITab aiStatus={aiStatus} fraudAnalytics={fraudAnalytics} />}
+        {activeTab === 'mfa' && <MFATab mfaAnalytics={mfaAnalytics} securityOverview={securityOverview} />}
       </div>
     </div>
   );
 };
 
-// Overview Tab
-const OverviewTab = ({ systemHealth, fraudAnalytics }) => (
-  <div className="overview-tab">
-    <div className="metrics-grid">
-      <div className="metric-card highlight">
-        <div className="metric-header">
-          <span className="metric-icon">🛡️</span>
-          <h3>System Status</h3>
-        </div>
-        <div className="metric-value">{systemHealth?.status || 'Unknown'}</div>
-        <div className="metric-change positive">
-          {systemHealth?.metrics?.services_healthy || 0}/{systemHealth?.metrics?.services_total || 0} services healthy
-        </div>
-      </div>
 
-      <div className="metric-card">
-        <div className="metric-header">
-          <span className="metric-icon">🚨</span>
-          <h3>Fraud Rate</h3>
-        </div>
-        <div className="metric-value">{fraudAnalytics?.fraud_stats?.fraud_rate || 0}%</div>
-        <div className="metric-change neutral">
-          {fraudAnalytics?.fraud_stats?.blocked_count || 0} blocked registrations
-        </div>
-      </div>
 
-      <div className="metric-card">
-        <div className="metric-header">
-          <span className="metric-icon">👥</span>
-          <h3>Total Registrations</h3>
-        </div>
-        <div className="metric-value">{fraudAnalytics?.fraud_stats?.total_registrations || 0}</div>
-        <div className="metric-change positive">Real-time monitoring</div>
-      </div>
-
-      <div className="metric-card">
-        <div className="metric-header">
-          <span className="metric-icon">🤖</span>
-          <h3>AI Accuracy</h3>
-        </div>
-        <div className="metric-value">{fraudAnalytics?.ai_model_stats?.model_accuracy || 0}%</div>
-        <div className="metric-change positive">Machine learning powered</div>
-      </div>
-    </div>
-
-    <div className="charts-section">
-      <div className="chart-container">
-        <div className="chart-title">🎯 Risk Distribution</div>
-        <RiskDistributionChart data={fraudAnalytics?.risk_distribution} />
-      </div>
-      
-      <div className="chart-container">
-        <div className="chart-title">⚡ Top Risk Factors</div>
-        <RiskFactorsChart data={fraudAnalytics?.top_risk_factors} />
-      </div>
-    </div>
-  </div>
-);
-
-// Fraud Analytics Tab
-const FraudTab = ({ fraudAnalytics, realtimeEvents }) => (
-  <div className="fraud-tab">
-    <div className="fraud-stats-grid">
-      <div className="stat-card high-risk">
-        <div className="stat-icon">🔴</div>
-        <div className="stat-content">
-          <div className="stat-value">{fraudAnalytics?.fraud_stats?.high_risk_count || 0}</div>
-          <div className="stat-label">High Risk</div>
-        </div>
-      </div>
-
-      <div className="stat-card medium-risk">
-        <div className="stat-icon">🟡</div>
-        <div className="stat-content">
-          <div className="stat-value">{fraudAnalytics?.fraud_stats?.medium_risk_count || 0}</div>
-          <div className="stat-label">Medium Risk</div>
-        </div>
-      </div>
-
-      <div className="stat-card low-risk">
-        <div className="stat-icon">🟢</div>
-        <div className="stat-content">
-          <div className="stat-value">{fraudAnalytics?.fraud_stats?.low_risk_count || 0}</div>
-          <div className="stat-label">Low Risk</div>
-        </div>
-      </div>
-
-      <div className="stat-card blocked">
-        <div className="stat-icon">⛔</div>
-        <div className="stat-content">
-          <div className="stat-value">{fraudAnalytics?.fraud_stats?.blocked_count || 0}</div>
-          <div className="stat-label">Blocked</div>
-        </div>
-      </div>
-    </div>
-
-    <div className="activity-section">
-      <h3>🔄 Real-time Fraud Events</h3>
-      <div className="activity-feed">
-        {realtimeEvents.slice(0, 10).map((event, i) => (
-          <div key={i} className={`activity-item ${event.severity || 'info'}`}>
-            <div className="activity-time">{new Date(event.timestamp).toLocaleTimeString()}</div>
-            <div className="activity-content">
-              <div className="activity-title">{event.email}</div>
-              <div className="activity-details">
-                Score: {event.fraud_score?.toFixed(2)} | 
-                Risk: {event.risk_level} |
-                Status: {event.blocked ? 'Blocked' : 'Allowed'}
-              </div>
-            </div>
-            <div className={`activity-indicator ${event.blocked ? 'blocked' : 'allowed'}`}></div>
-          </div>
-        ))}
-      </div>
-    </div>
-  </div>
-);
-
-// Services Tab
-const ServicesTab = ({ serviceStatus, temporalStatus }) => (
-  <div className="services-tab">
-    <div className="services-grid">
-      <div className="service-card">
-        <div className="service-header">
-          <span className="service-icon">🖥️</span>
-          <h3>Simple Server</h3>
-          <span className={`status-badge ${serviceStatus?.simple_server?.status || 'unknown'}`}>
-            {serviceStatus?.simple_server?.status || 'Unknown'}
-          </span>
-        </div>
-        <div className="service-details">
-          <p>Port: {serviceStatus?.simple_server?.port || 'N/A'}</p>
-          <p>Features: {serviceStatus?.simple_server?.features?.join(', ') || 'None'}</p>
-        </div>
-      </div>
-
-      <div className="service-card">
-        <div className="service-header">
-          <span className="service-icon">🔧</span>
-          <h3>Main Backend</h3>
-          <span className={`status-badge ${serviceStatus?.main_backend?.status || 'unknown'}`}>
-            {serviceStatus?.main_backend?.status || 'Unknown'}
-          </span>
-        </div>
-        <div className="service-details">
-          <p>Port: {serviceStatus?.main_backend?.port || 'N/A'}</p>
-          <p>Features: {serviceStatus?.main_backend?.features?.join(', ') || 'None'}</p>
-        </div>
-      </div>
-
-      <div className="service-card">
-        <div className="service-header">
-          <span className="service-icon">🌊</span>
-          <h3>Temporal</h3>
-          <span className={`status-badge ${temporalStatus?.temporal_connected ? 'healthy' : 'critical'}`}>
-            {temporalStatus?.temporal_connected ? 'Connected' : 'Disconnected'}
-          </span>
-        </div>
-        <div className="service-details">
-          <p>Server: {temporalStatus?.temporal_server || 'N/A'}</p>
-          <p>Namespace: {temporalStatus?.namespace || 'default'}</p>
-          <p>Task Queue: {temporalStatus?.task_queue || 'N/A'}</p>
-        </div>
-      </div>
-    </div>
-  </div>
-);
-
-// Users Tab
-const UsersTab = ({ userStats }) => (
-  <div className="users-tab">
-    <div className="user-stats-grid">
-      <div className="user-stat-card">
-        <div className="stat-icon">👥</div>
-        <div className="stat-value">{userStats?.total_users || 0}</div>
-        <div className="stat-label">Total Users</div>
-      </div>
-
-      <div className="user-stat-card">
-        <div className="stat-icon">✅</div>
-        <div className="stat-value">{userStats?.verified_users || 0}</div>
-        <div className="stat-label">Verified Users</div>
-      </div>
-
-      <div className="user-stat-card">
-        <div className="stat-icon">⏳</div>
-        <div className="stat-value">{userStats?.pending_verification || 0}</div>
-        <div className="stat-label">Pending Verification</div>
-      </div>
-
-      <div className="user-stat-card">
-        <div className="stat-icon">🔄</div>
-        <div className="stat-value">{userStats?.recent_registrations_24h || 0}</div>
-        <div className="stat-label">New Today</div>
-      </div>
-    </div>
-  </div>
-);
-
-// AI System Tab
-const AITab = ({ aiStatus, fraudAnalytics }) => (
-  <div className="ai-tab">
-    <div className="ai-metrics-grid">
-      <div className="ai-card">
-        <div className="ai-header">
-          <span className="ai-icon">🤖</span>
-          <h3>Ollama Status</h3>
-          <span className={`status-badge ${aiStatus?.ollama_available ? 'healthy' : 'critical'}`}>
-            {aiStatus?.ollama_available ? 'Online' : 'Offline'}
-          </span>
-        </div>
-        <div className="ai-details">
-          <p>Model: {aiStatus?.model_name || 'llama3'}</p>
-          <p>Endpoint: {aiStatus?.endpoint || 'localhost:11434'}</p>
-        </div>
-      </div>
-
-      <div className="ai-card">
-        <div className="ai-header">
-          <span className="ai-icon">⚡</span>
-          <h3>Performance</h3>
-          <span className="status-badge healthy">Active</span>
-        </div>
-        <div className="ai-details">
-          <p>Response Time: {fraudAnalytics?.ai_model_stats?.avg_response_time_ms || 0}ms</p>
-          <p>Accuracy: {fraudAnalytics?.ai_model_stats?.model_accuracy || 0}%</p>
-        </div>
-      </div>
-
-      <div className="ai-card">
-        <div className="ai-header">
-          <span className="ai-icon">📊</span>
-          <h3>Usage Stats</h3>
-          <span className="status-badge healthy">Monitoring</span>
-        </div>
-        <div className="ai-details">
-          <p>Total Requests: {fraudAnalytics?.ai_model_stats?.total_ai_requests || 0}</p>
-          <p>Availability: {fraudAnalytics?.ai_model_stats?.ai_availability || 0}%</p>
-        </div>
-      </div>
-    </div>
-  </div>
-);
-
-// Chart Components
-const RiskDistributionChart = ({ data }) => {
-  if (!data) return <div className="no-data">No data available</div>;
-  
-  const total = Object.values(data).reduce((sum, val) => sum + val, 0);
-  
-  return (
-    <div className="risk-chart">
-      {Object.entries(data).map(([key, value]) => (
-        <div key={key} className="risk-bar">
-          <span className="risk-label">{key}</span>
-          <div className="risk-bar-container">
-            <div 
-              className={`risk-bar-fill ${key}`}
-              style={{ width: `${(value / total) * 100}%` }}
-            ></div>
-          </div>
-          <span className="risk-value">{value}</span>
-        </div>
-      ))}
-    </div>
-  );
-};
-
-const RiskFactorsChart = ({ data }) => {
-  if (!data) return <div className="no-data">No data available</div>;
-  
-  return (
-    <div className="risk-factors-chart">
-      {data.slice(0, 5).map((factor, i) => (
-        <div key={i} className="factor-item">
-          <span className="factor-name">{factor.factor.replace(/_/g, ' ')}</span>
-          <div className="factor-bar">
-            <div 
-              className="factor-fill"
-              style={{ width: `${factor.percentage}%` }}
-            ></div>
-          </div>
-          <span className="factor-percentage">{factor.percentage}%</span>
-        </div>
-      ))}
-    </div>
-  );
-};
 
 export default AdminDashboard;

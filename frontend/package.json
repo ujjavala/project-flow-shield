@@ -1,5 +1,5 @@
 {
-  "name": "oauth2-auth-frontend",
+  "name": "flowshield-frontend",
   "version": "1.0.0",
   "private": true,
   "dependencies": {

@@ -27,12 +27,21 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/token")
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup
-    logger.info("Starting OAuth2 Authentication Service")
+    logger.info("Starting FlowShield Authentication Service")
     await init_db()
     logger.info("Database initialized")
+    
+    # Initialize analytics service
+    try:
+        from app.api.admin_dashboard import initialize_analytics
+        await initialize_analytics()
+        logger.info("Analytics service initialized")
+    except Exception as e:
+        logger.warning(f"Analytics service initialization failed: {e}")
+    
     yield
     # Shutdown
-    logger.info("Shutting down OAuth2 Authentication Service")
+    logger.info("Shutting down FlowShield Authentication Service")
 
 app = FastAPI(
     title="OAuth2 Authentication Service",

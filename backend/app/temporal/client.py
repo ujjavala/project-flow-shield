@@ -62,11 +62,13 @@ async def create_worker() -> Worker:
             EmailVerificationWorkflow as UserEmailVerificationWorkflow
         )
         from app.temporal.workflows.user_login import UserLoginWorkflow
+        from app.temporal.workflows.mfa_workflow import MFAWorkflow
         from app.temporal.activities.email_activities import email_activities
         from app.temporal.activities.user import UserActivities
         from app.temporal.activities.auth import AuthActivities
         from app.temporal.activities.ai_auth import AIAuthActivities
         from app.temporal.activities.email import EmailActivities
+        from app.temporal.activities.mfa_activities import MFAActivities
         
         email_workflows = [
             EmailDeliveryWorkflow,
@@ -75,7 +77,8 @@ async def create_worker() -> Worker:
             PasswordResetConfirmationWorkflow,
             UserRegistrationWorkflow,
             UserEmailVerificationWorkflow,
-            UserLoginWorkflow
+            UserLoginWorkflow,
+            MFAWorkflow
         ]
         
         # Initialize activity instances
@@ -83,6 +86,7 @@ async def create_worker() -> Worker:
         auth_activities = AuthActivities()  
         ai_auth_activities = AIAuthActivities()
         simple_email_activities = EmailActivities()
+        mfa_activities = MFAActivities()
         
         email_activities_list = [
             # Email activities
@@ -118,7 +122,16 @@ async def create_worker() -> Worker:
             ai_auth_activities.analyze_password_security_ai,
             ai_auth_activities.detect_account_takeover,
             ai_auth_activities.optimize_email_delivery_strategy,
-            ai_auth_activities.analyze_verification_behavior
+            ai_auth_activities.analyze_verification_behavior,
+            # MFA activities
+            mfa_activities.assess_mfa_risk,
+            mfa_activities.send_mfa_challenge,
+            mfa_activities.verify_mfa_code,
+            mfa_activities.generate_mfa_token,
+            mfa_activities.get_user_mfa_config,
+            mfa_activities.log_mfa_success,
+            mfa_activities.log_mfa_failure,
+            mfa_activities.send_mfa_retry_notification
         ]
         logger.info("Email workflows and activities loaded")
     except ImportError as e:

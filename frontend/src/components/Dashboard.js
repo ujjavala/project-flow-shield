@@ -1,6 +1,14 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import './Dashboard.css';
+import LineChart from './Dashboard/components/LineChart';
+import NetworkVisualization from './Dashboard/components/NetworkVisualization';
+import ParticleBackground from './Dashboard/components/ParticleBackground';
+import MetricCard from './Dashboard/components/MetricCard';
+import HealthCard from './Dashboard/components/HealthCard';
+import FeatureCard from './Dashboard/components/FeatureCard';
+import FlowShieldLogo from './common/FlowShieldLogo';
+import './common/FlowShieldLogo.css';
 
 const Dashboard = () => {
   const { user, logout } = useAuth();
@@ -210,109 +218,22 @@ const Dashboard = () => {
     );
   }
 
-  // Interactive chart components
-  const LineChart = ({ data, color, label }) => {
-    const maxValue = Math.max(...data.map(d => d.cpu || d.memory || d.network || 100));
-    const minValue = Math.min(...data.map(d => d.cpu || d.memory || d.network || 0));
-    const range = maxValue - minValue || 1;
-
-    return (
-      <div className="interactive-chart">
-        <div className="chart-header">
-          <span className="chart-label">{label}</span>
-          <span className="chart-value">{data[data.length - 1]?.cpu?.toFixed(1) || '0'}%</span>
-        </div>
-        <svg width="100%" height="60" className="chart-svg">
-          <defs>
-            <linearGradient id={`gradient-${label}`} x1="0%" y1="0%" x2="0%" y2="100%">
-              <stop offset="0%" stopColor={color} stopOpacity="0.6"/>
-              <stop offset="100%" stopColor={color} stopOpacity="0.1"/>
-            </linearGradient>
-          </defs>
-          <polyline
-            fill="none"
-            stroke={color}
-            strokeWidth="2"
-            points={data.map((d, i) => 
-              `${(i / (data.length - 1)) * 100},${60 - ((d.cpu - minValue) / range) * 50}`
-            ).join(' ')}
-          />
-          <polygon
-            fill={`url(#gradient-${label})`}
-            points={`0,60 ${data.map((d, i) => 
-              `${(i / (data.length - 1)) * 100},${60 - ((d.cpu - minValue) / range) * 50}`
-            ).join(' ')} 100,60`}
-          />
-        </svg>
-      </div>
-    );
-  };
-
-  const NetworkVisualization = () => (
-    <div className="network-viz">
-      <svg width="100%" height="200" className="network-svg">
-        {activeConnections.map(conn => (
-          <g key={conn.id}>
-            <line
-              x1={conn.from.x}
-              y1={conn.from.y}
-              x2={conn.to.x}
-              y2={conn.to.y}
-              stroke={conn.active ? '#4facfe' : 'rgba(255,255,255,0.2)'}
-              strokeWidth={conn.strength * 3 + 1}
-              opacity={conn.active ? 0.8 : 0.3}
-            />
-            <circle
-              cx={conn.from.x}
-              cy={conn.from.y}
-              r={conn.active ? 6 : 3}
-              fill={conn.active ? '#00f2fe' : 'rgba(255,255,255,0.5)'}
-              opacity={conn.active ? 1 : 0.6}
-            />
-            <circle
-              cx={conn.to.x}
-              cy={conn.to.y}
-              r={conn.active ? 6 : 3}
-              fill={conn.active ? '#4facfe' : 'rgba(255,255,255,0.5)'}
-              opacity={conn.active ? 1 : 0.6}
-            />
-          </g>
-        ))}
-      </svg>
-    </div>
-  );
-
-  const ParticleBackground = () => (
-    <div className="particle-background">
-      {particleData.map(particle => (
-        <div
-          key={particle.id}
-          className="particle"
-          style={{
-            left: `${particle.x}px`,
-            top: `${particle.y}px`,
-            width: `${particle.size}px`,
-            height: `${particle.size}px`,
-            backgroundColor: particle.color,
-            opacity: particle.opacity
-          }}
-        />
-      ))}
-    </div>
-  );
 
   return (
     <div className="modern-dashboard">
-      <ParticleBackground />
+      <ParticleBackground particleData={particleData} />
       
       {/* Header */}
       <div className="dashboard-header">
         <div className="header-content">
           <div className="welcome-section">
-            <h1>Mission Control Dashboard</h1>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '0.5rem' }}>
+              <FlowShieldLogo size={40} />
+              <h1>FlowShield Security Center</h1>
+            </div>
             <p className="status-line">
               <span className="status-dot healthy"></span>
-              All systems operational • Temporal.io powered authentication
+              Intelligent Authentication • AI-Powered Fraud Detection • Temporal-Reliable
             </p>
           </div>
           <div className="header-actions">
@@ -330,41 +251,31 @@ const Dashboard = () => {
 
       {/* Real-time metrics grid */}
       <div className="metrics-grid">
-        <div className="metric-card highlight">
-          <div className="metric-header">
-            <span className="metric-icon">👥</span>
-            <h3>Active Users</h3>
-          </div>
-          <div className="metric-value">{systemStats.activeUsers}</div>
-          <div className="metric-change positive">+12 from last hour</div>
-        </div>
-
-        <div className="metric-card">
-          <div className="metric-header">
-            <span className="metric-icon">🚀</span>
-            <h3>Total Requests</h3>
-          </div>
-          <div className="metric-value">{systemStats.totalRequests.toLocaleString()}</div>
-          <div className="metric-change positive">+{Math.floor(Math.random() * 50)} this session</div>
-        </div>
-
-        <div className="metric-card">
-          <div className="metric-header">
-            <span className="metric-icon">✅</span>
-            <h3>Success Rate</h3>
-          </div>
-          <div className="metric-value">{systemStats.successRate.toFixed(1)}%</div>
-          <div className="metric-change positive">Excellent performance</div>
-        </div>
-
-        <div className="metric-card">
-          <div className="metric-header">
-            <span className="metric-icon">⚡</span>
-            <h3>Response Time</h3>
-          </div>
-          <div className="metric-value">{Math.round(systemStats.responseTime)}ms</div>
-          <div className="metric-change neutral">Within SLA limits</div>
-        </div>
+        <MetricCard
+          icon="👥"
+          title="Active Users"
+          value={systemStats.activeUsers}
+          change={{ text: "+12 from last hour", type: "positive" }}
+          highlight={true}
+        />
+        <MetricCard
+          icon="🚀"
+          title="Total Requests"
+          value={systemStats.totalRequests.toLocaleString()}
+          change={{ text: `+${Math.floor(Math.random() * 50)} this session`, type: "positive" }}
+        />
+        <MetricCard
+          icon="✅"
+          title="Success Rate"
+          value={`${systemStats.successRate.toFixed(1)}%`}
+          change={{ text: "Excellent performance", type: "positive" }}
+        />
+        <MetricCard
+          icon="⚡"
+          title="Response Time"
+          value={`${Math.round(systemStats.responseTime)}ms`}
+          change={{ text: "Within SLA limits", type: "neutral" }}
+        />
       </div>
 
       {/* System Health Monitoring */}
@@ -378,83 +289,36 @@ const Dashboard = () => {
         </div>
 
         <div className="health-grid">
-          <div className="health-card interactive-card">
-            <div className="health-header">
-              <span className="health-icon">🖥️</span>
-              <h4>CPU Usage</h4>
-              <span className={`health-status ${getHealthStatus(systemStats.cpuUsage, true)}`}>
-                {getHealthStatus(systemStats.cpuUsage, true)}
-              </span>
-            </div>
-            <div className="progress-container">
-              <div className="progress-bar">
-                <div 
-                  className={`progress-fill ${getHealthStatus(systemStats.cpuUsage, true)}`}
-                  style={{ width: `${systemStats.cpuUsage}%` }}
-                ></div>
-              </div>
-              <span className="progress-value">{Math.round(systemStats.cpuUsage)}%</span>
-            </div>
-            {chartData.length > 0 && (
-              <LineChart 
-                data={chartData.map(d => ({ cpu: d.cpu }))} 
-                color="#4facfe" 
-                label="CPU-Trend" 
-              />
-            )}
-          </div>
-
-          <div className="health-card interactive-card">
-            <div className="health-header">
-              <span className="health-icon">💾</span>
-              <h4>Memory Usage</h4>
-              <span className={`health-status ${getHealthStatus(systemStats.memoryUsage, true)}`}>
-                {getHealthStatus(systemStats.memoryUsage, true)}
-              </span>
-            </div>
-            <div className="progress-container">
-              <div className="progress-bar">
-                <div 
-                  className={`progress-fill ${getHealthStatus(systemStats.memoryUsage, true)}`}
-                  style={{ width: `${systemStats.memoryUsage}%` }}
-                ></div>
-              </div>
-              <span className="progress-value">{Math.round(systemStats.memoryUsage)}%</span>
-            </div>
-            {chartData.length > 0 && (
-              <LineChart 
-                data={chartData.map(d => ({ cpu: d.memory }))} 
-                color="#00f2fe" 
-                label="Memory-Trend" 
-              />
-            )}
-          </div>
-
-          <div className="health-card interactive-card">
-            <div className="health-header">
-              <span className="health-icon">🌐</span>
-              <h4>Network Activity</h4>
-              <span className={`health-status ${getHealthStatus(systemStats.networkActivity)}`}>
-                {getHealthStatus(systemStats.networkActivity)}
-              </span>
-            </div>
-            <div className="progress-container">
-              <div className="progress-bar">
-                <div 
-                  className={`progress-fill ${getHealthStatus(systemStats.networkActivity)}`}
-                  style={{ width: `${systemStats.networkActivity}%` }}
-                ></div>
-              </div>
-              <span className="progress-value">{Math.round(systemStats.networkActivity)}%</span>
-            </div>
-            {chartData.length > 0 && (
-              <LineChart 
-                data={chartData.map(d => ({ cpu: d.network }))} 
-                color="#00ff88" 
-                label="Network-Trend" 
-              />
-            )}
-          </div>
+          <HealthCard
+            icon="🖥️"
+            title="CPU Usage"
+            value={systemStats.cpuUsage}
+            status={getHealthStatus(systemStats.cpuUsage, true)}
+            chartData={chartData.map(d => ({ cpu: d.cpu }))}
+            chartColor="#4facfe"
+            chartLabel="CPU-Trend"
+            getHealthStatus={getHealthStatus}
+          />
+          <HealthCard
+            icon="💾"
+            title="Memory Usage"
+            value={systemStats.memoryUsage}
+            status={getHealthStatus(systemStats.memoryUsage, true)}
+            chartData={chartData.map(d => ({ cpu: d.memory }))}
+            chartColor="#00f2fe"
+            chartLabel="Memory-Trend"
+            getHealthStatus={getHealthStatus}
+          />
+          <HealthCard
+            icon="🌐"
+            title="Network Activity"
+            value={systemStats.networkActivity}
+            status={getHealthStatus(systemStats.networkActivity)}
+            chartData={chartData.map(d => ({ cpu: d.network }))}
+            chartColor="#00ff88"
+            chartLabel="Network-Trend"
+            getHealthStatus={getHealthStatus}
+          />
         </div>
 
         {/* Network Topology Visualization */}
@@ -472,7 +336,7 @@ const Dashboard = () => {
               </span>
             </div>
           </div>
-          <NetworkVisualization />
+          <NetworkVisualization activeConnections={activeConnections} />
         </div>
       </div>
 
@@ -484,45 +348,34 @@ const Dashboard = () => {
         </div>
 
         <div className="features-grid">
-          <div className="feature-card">
-            <div className="feature-visual">
-              <div className="feature-icon-large">🔐</div>
-              <div className="feature-animation pulse-glow"></div>
-            </div>
-            <h3>OAuth2 + JWT</h3>
-            <p>Secure token-based authentication with refresh capabilities</p>
-            <div className="feature-status online">Active</div>
-          </div>
-
-          <div className="feature-card">
-            <div className="feature-visual">
-              <div className="feature-icon-large">⚡</div>
-              <div className="feature-animation wave-glow"></div>
-            </div>
-            <h3>Temporal Workflows</h3>
-            <p>Reliable, durable authentication workflows with automatic retries</p>
-            <div className="feature-status online">Running</div>
-          </div>
-
-          <div className="feature-card">
-            <div className="feature-visual">
-              <div className="feature-icon-large">🧠</div>
-              <div className="feature-animation orbit-glow"></div>
-            </div>
-            <h3>AI Fraud Detection</h3>
-            <p>Machine learning powered behavioral analysis and risk assessment</p>
-            <div className="feature-status online">Learning</div>
-          </div>
-
-          <div className="feature-card">
-            <div className="feature-visual">
-              <div className="feature-icon-large">📊</div>
-              <div className="feature-animation data-glow"></div>
-            </div>
-            <h3>Real-time Analytics</h3>
-            <p>Live monitoring and comprehensive dashboard analytics</p>
-            <div className="feature-status online">Monitoring</div>
-          </div>
+          <FeatureCard
+            icon="🔐"
+            title="OAuth2 + JWT"
+            description="Secure token-based authentication with refresh capabilities"
+            status="Active"
+            animationClass="pulse-glow"
+          />
+          <FeatureCard
+            icon="⚡"
+            title="Temporal Workflows"
+            description="Reliable, durable authentication workflows with automatic retries"
+            status="Running"
+            animationClass="wave-glow"
+          />
+          <FeatureCard
+            icon="🧠"
+            title="AI Fraud Detection"
+            description="Machine learning powered behavioral analysis and risk assessment"
+            status="Learning"
+            animationClass="orbit-glow"
+          />
+          <FeatureCard
+            icon="📊"
+            title="Real-time Analytics"
+            description="Live monitoring and comprehensive dashboard analytics"
+            status="Monitoring"
+            animationClass="data-glow"
+          />
         </div>
       </div>
 
