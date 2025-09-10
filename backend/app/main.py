@@ -157,6 +157,14 @@ try:
 except ImportError as e:
     logger.warning(f"Admin analytics endpoints not available: {e}")
 
+# Include Admin Dashboard router  
+try:
+    from app.api import admin_dashboard
+    app.include_router(admin_dashboard.router, tags=["admin-dashboard"])
+    logger.info("Admin dashboard endpoints registered")
+except ImportError as e:
+    logger.warning(f"Admin dashboard endpoints not available: {e}")
+
 @app.get("/")
 async def root():
     return {

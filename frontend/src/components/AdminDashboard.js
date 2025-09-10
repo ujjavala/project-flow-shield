@@ -2,68 +2,124 @@ import React, { useState, useEffect } from 'react';
 import './AdminDashboard.css';
 
 const AdminDashboard = () => {
-  const [analytics, setAnalytics] = useState(null);
+  const [dashboardData, setDashboardData] = useState(null);
+  const [systemHealth, setSystemHealth] = useState(null);
+  const [userStats, setUserStats] = useState(null);
+  const [serviceStatus, setServiceStatus] = useState(null);
+  const [aiStatus, setAiStatus] = useState(null);
+  const [temporalStatus, setTemporalStatus] = useState(null);
+  const [fraudAnalytics, setFraudAnalytics] = useState(null);
   const [realtimeEvents, setRealtimeEvents] = useState([]);
-  const [aiHealth, setAiHealth] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [timeRange, setTimeRange] = useState(24);
+  const [activeTab, setActiveTab] = useState('overview');
+  const [autoRefresh, setAutoRefresh] = useState(true);
+  const [lastUpdated, setLastUpdated] = useState(new Date());
 
   useEffect(() => {
-    loadDashboardData();
-    const interval = setInterval(loadRealtimeEvents, 30000); // Update every 30 seconds
-    return () => clearInterval(interval);
-  }, [timeRange]);
+    loadAllData();
+    if (autoRefresh) {
+      const interval = setInterval(loadAllData, 30000);
+      return () => clearInterval(interval);
+    }
+  }, [autoRefresh]);
 
-  const loadDashboardData = async () => {
+  const loadAllData = async () => {
     try {
       setLoading(true);
       
-      // Load analytics data
-      const analyticsResponse = await fetch(`/admin/fraud-analytics?hours=${timeRange}`);
-      const analyticsData = await analyticsResponse.json();
-      setAnalytics(analyticsData);
+      const baseUrl = 'http://localhost:8000';
+      
+      const [
+        healthResponse,
+        usersResponse,
+        servicesResponse,
+        aiResponse,
+        temporalResponse,
+        fraudAnalyticsResponse,
+        realtimeEventsResponse
+      ] = await Promise.allSettled([
+        fetch(`${baseUrl}/admin/health`),
+        fetch(`${baseUrl}/admin/users`),
+        fetch(`${baseUrl}/admin/services`),
+        fetch(`${baseUrl}/admin/ai-status`),
+        fetch(`${baseUrl}/admin/temporal-status`),
+        fetch(`${baseUrl}/admin/fraud-analytics`),
+        fetch(`${baseUrl}/admin/fraud-events/realtime?limit=20`)
+      ]);
 
-      // Load AI health
-      const aiHealthResponse = await fetch('/admin/ai-health/detailed');
-      const aiHealthData = await aiHealthResponse.json();
-      setAiHealth(aiHealthData);
+      if (healthResponse.status === 'fulfilled') {
+        setSystemHealth(await healthResponse.value.json());
+      }
+      
+      if (usersResponse.status === 'fulfilled') {
+        setUserStats(await usersResponse.value.json());
+      }
+      
+      if (servicesResponse.status === 'fulfilled') {
+        setServiceStatus(await servicesResponse.value.json());
+      }
+      
+      if (aiResponse.status === 'fulfilled') {
+        setAiStatus(await aiResponse.value.json());
+      }
+      
+      if (temporalResponse.status === 'fulfilled') {
+        setTemporalStatus(await temporalResponse.value.json());
+      }
+      
+      if (fraudAnalyticsResponse.status === 'fulfilled') {
+        setFraudAnalytics(await fraudAnalyticsResponse.value.json());
+      }
+      
+      if (realtimeEventsResponse.status === 'fulfilled') {
+        const eventsData = await realtimeEventsResponse.value.json();
+        setRealtimeEvents(eventsData?.events || []);
+      }
 
+      setLastUpdated(new Date());
       setError(null);
     } catch (err) {
       console.error('Failed to load dashboard data:', err);
-      setError('Failed to load dashboard data');
+      setError('Failed to load dashboard data: ' + err.message);
     } finally {
       setLoading(false);
     }
   };
 
-  const loadRealtimeEvents = async () => {
+  const performAction = async (action, target, parameters = {}) => {
     try {
-      const response = await fetch('/admin/fraud-events/realtime?limit=20');
-      const data = await response.json();
-      setRealtimeEvents(data.events);
+      const response = await fetch('http://localhost:8000/admin/actions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ action, target, parameters })
+      });
+      
+      const result = await response.json();
+      
+      if (result.status === 'success') {
+        alert(`✅ ${action} successful!\n${JSON.stringify(result.result, null, 2)}`);
+      } else {
+        alert(`❌ ${action} failed: ${result.error}`);
+      }
+      
+      await loadAllData();
     } catch (err) {
-      console.error('Failed to load realtime events:', err);
+      alert(`❌ Action failed: ${err.message}`);
     }
   };
 
-  const simulateEvents = async () => {
-    try {
-      await fetch('/admin/fraud-events/simulate?count=10', { method: 'POST' });
-      await loadDashboardData();
-      await loadRealtimeEvents();
-    } catch (err) {
-      console.error('Failed to simulate events:', err);
-    }
-  };
-
-  if (loading && !analytics) {
+  if (loading && !dashboardData) {
     return (
       <div className="admin-dashboard">
-        <div className="loading">
-          <div className="spinner"></div>
-          <p>Loading fraud analytics dashboard...</p>
+        <div className="loading-container">
+          <div className="loading-spinner"></div>
+          <div className="loading-text">
+            <h2>🚀 Loading Admin Dashboard...</h2>
+            <p>Fetching system status, metrics, and analytics</p>
+          </div>
         </div>
       </div>
     );
@@ -72,10 +128,13 @@ const AdminDashboard = () => {
   if (error) {
     return (
       <div className="admin-dashboard">
-        <div className="error">
-          <h2>🚨 Dashboard Error</h2>
+        <div className="error-container">
+          <div className="error-icon">⚠️</div>
+          <h2>Dashboard Error</h2>
           <p>{error}</p>
-          <button onClick={loadDashboardData}>Retry</button>
+          <button onClick={loadAllData} className="retry-btn">
+            🔄 Retry
+          </button>
         </div>
       </div>
     );
@@ -83,233 +142,369 @@ const AdminDashboard = () => {
 
   return (
     <div className="admin-dashboard">
+      {/* Header */}
       <div className="dashboard-header">
-        <h1>🛡️ AI-Powered Fraud Detection Dashboard</h1>
-        <div className="dashboard-controls">
-          <select value={timeRange} onChange={(e) => setTimeRange(parseInt(e.target.value))}>
-            <option value={1}>Last Hour</option>
-            <option value={24}>Last 24 Hours</option>
-            <option value={168}>Last Week</option>
-          </select>
-          <button onClick={loadDashboardData} className="refresh-btn">🔄 Refresh</button>
-          <button onClick={simulateEvents} className="simulate-btn">⚡ Simulate Events</button>
+        <div className="header-title">
+          <h1>🛡️ Fraud Detection Admin Dashboard</h1>
+          <p>Real-time monitoring and fraud analytics</p>
         </div>
-      </div>
-
-      <div className="dashboard-grid">
-        {/* Key Metrics */}
-        <div className="metrics-row">
-          <MetricCard 
-            title="Total Registrations"
-            value={analytics?.fraud_stats?.total_registrations || 0}
-            icon="👥"
-            trend="+12% from yesterday"
-          />
-          <MetricCard 
-            title="Fraud Rate"
-            value={`${analytics?.fraud_stats?.fraud_rate || 0}%`}
-            icon="🚨"
-            trend={analytics?.fraud_stats?.fraud_rate > 15 ? "⚠️ Above threshold" : "✅ Normal"}
-            critical={analytics?.fraud_stats?.fraud_rate > 15}
-          />
-          <MetricCard 
-            title="AI Accuracy"
-            value={`${aiHealth?.model_info?.accuracy_score || 94.2}%`}
-            icon="🤖"
-            trend="Ollama + Fallback"
-          />
-          <MetricCard 
-            title="Blocked Accounts"
-            value={analytics?.fraud_stats?.blocked_count || 0}
-            icon="🛑"
-            trend="High-risk registrations"
-          />
-        </div>
-
-        {/* Charts Row */}
-        <div className="charts-row">
-          <div className="chart-container">
-            <h3>📊 Risk Distribution</h3>
-            <RiskDistributionChart data={analytics?.risk_distribution} />
+        
+        <div className="header-controls">
+          <div className="status-indicator">
+            <span className={`status-dot ${systemHealth?.status || 'unknown'}`}></span>
+            <span>System {systemHealth?.status || 'Unknown'}</span>
           </div>
           
-          <div className="chart-container">
-            <h3>📈 Fraud Timeline</h3>
-            <FraudTimelineChart data={analytics?.fraud_timeline} />
+          <div className="last-updated">
+            Last: {lastUpdated.toLocaleTimeString()}
           </div>
-        </div>
-
-        {/* AI Performance */}
-        <div className="ai-performance-section">
-          <h3>🤖 AI System Performance</h3>
-          <div className="ai-metrics">
-            <div className="ai-metric">
-              <span className="label">Ollama Requests</span>
-              <span className="value">{analytics?.ai_model_stats?.ollama_requests || 0}</span>
-            </div>
-            <div className="ai-metric">
-              <span className="label">Fallback Requests</span>
-              <span className="value">{analytics?.ai_model_stats?.fallback_requests || 0}</span>
-            </div>
-            <div className="ai-metric">
-              <span className="label">Avg Response Time</span>
-              <span className="value">{analytics?.ai_model_stats?.avg_response_time_ms || 0}ms</span>
-            </div>
-            <div className="ai-metric">
-              <span className="label">AI Availability</span>
-              <span className="value">{analytics?.ai_model_stats?.ai_availability || 100}%</span>
-            </div>
-          </div>
-        </div>
-
-        {/* Top Risk Factors */}
-        <div className="risk-factors-section">
-          <h3>⚠️ Top Risk Factors</h3>
-          <div className="risk-factors-list">
-            {analytics?.top_risk_factors?.map((factor, index) => (
-              <div key={index} className="risk-factor-item">
-                <span className="factor-name">{factor.factor}</span>
-                <span className="factor-count">{factor.count} events</span>
-                <span className="factor-percentage">{factor.percentage}%</span>
-                <div className="factor-bar">
-                  <div 
-                    className="factor-fill"
-                    style={{ width: `${factor.percentage}%` }}
-                  ></div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Realtime Events */}
-        <div className="realtime-events-section">
-          <h3>⚡ Real-time Fraud Events</h3>
-          <div className="events-list">
-            {realtimeEvents.map((event) => (
-              <div key={event.id} className={`event-item ${event.severity}`}>
-                <div className="event-time">
-                  {new Date(event.timestamp).toLocaleTimeString()}
-                </div>
-                <div className="event-email">{event.email}</div>
-                <div className="event-score">
-                  Score: {event.fraud_score.toFixed(2)}
-                </div>
-                <div className="event-level">{event.risk_level}</div>
-                <div className="event-factors">
-                  {event.risk_factors.slice(0, 2).map(factor => (
-                    <span key={factor} className="factor-tag">{factor}</span>
-                  ))}
-                </div>
-                {event.blocked && <span className="blocked-badge">BLOCKED</span>}
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Recent High-Risk Events */}
-        <div className="high-risk-events-section">
-          <h3>🚨 Recent High-Risk Events</h3>
-          <div className="high-risk-list">
-            {analytics?.recent_high_risk_events?.map((event, index) => (
-              <div key={index} className="high-risk-item">
-                <div className="event-header">
-                  <span className="event-email">{event.email}</span>
-                  <span className={`event-score ${event.fraud_score > 0.8 ? 'critical' : 'high'}`}>
-                    {event.fraud_score.toFixed(3)}
-                  </span>
-                </div>
-                <div className="event-time">
-                  {new Date(event.timestamp).toLocaleString()}
-                </div>
-                <div className="event-factors">
-                  {event.risk_factors.map(factor => (
-                    <span key={factor} className="risk-tag">{factor}</span>
-                  ))}
-                </div>
-                {event.blocked && (
-                  <div className="blocked-status">🛑 Registration Blocked</div>
-                )}
-              </div>
-            ))}
-          </div>
+          
+          <label className="auto-refresh-toggle">
+            <input 
+              type="checkbox" 
+              checked={autoRefresh} 
+              onChange={(e) => setAutoRefresh(e.target.checked)}
+            />
+            Auto-refresh
+          </label>
+          
+          <button onClick={loadAllData} className="refresh-btn" disabled={loading}>
+            {loading ? '⏳' : '🔄'}
+          </button>
         </div>
       </div>
 
-      {/* Temporal Workflow Link */}
-      <div className="temporal-link">
-        <a 
-          href="http://localhost:8081" 
-          target="_blank" 
-          rel="noopener noreferrer"
-          className="temporal-button"
+      {/* Tab Navigation */}
+      <div className="dashboard-tabs">
+        <button 
+          className={`tab-button ${activeTab === 'overview' ? 'active' : ''}`}
+          onClick={() => setActiveTab('overview')}
         >
-          🌊 View in Temporal UI
-        </a>
-        <p>Monitor AI-powered workflows and search by fraud scores</p>
+          📊 Overview
+        </button>
+        <button 
+          className={`tab-button ${activeTab === 'fraud' ? 'active' : ''}`}
+          onClick={() => setActiveTab('fraud')}
+        >
+          🚨 Fraud Analytics
+        </button>
+        <button 
+          className={`tab-button ${activeTab === 'services' ? 'active' : ''}`}
+          onClick={() => setActiveTab('services')}
+        >
+          🔧 Services
+        </button>
+        <button 
+          className={`tab-button ${activeTab === 'users' ? 'active' : ''}`}
+          onClick={() => setActiveTab('users')}
+        >
+          👥 Users
+        </button>
+        <button 
+          className={`tab-button ${activeTab === 'ai' ? 'active' : ''}`}
+          onClick={() => setActiveTab('ai')}
+        >
+          🤖 AI System
+        </button>
+      </div>
+
+      {/* Tab Content */}
+      <div className="tab-content">
+        {activeTab === 'overview' && <OverviewTab systemHealth={systemHealth} fraudAnalytics={fraudAnalytics} />}
+        {activeTab === 'fraud' && <FraudTab fraudAnalytics={fraudAnalytics} realtimeEvents={realtimeEvents} />}
+        {activeTab === 'services' && <ServicesTab serviceStatus={serviceStatus} temporalStatus={temporalStatus} />}
+        {activeTab === 'users' && <UsersTab userStats={userStats} />}
+        {activeTab === 'ai' && <AITab aiStatus={aiStatus} fraudAnalytics={fraudAnalytics} />}
       </div>
     </div>
   );
 };
 
-const MetricCard = ({ title, value, icon, trend, critical = false }) => (
-  <div className={`metric-card ${critical ? 'critical' : ''}`}>
-    <div className="metric-icon">{icon}</div>
-    <div className="metric-content">
-      <h4>{title}</h4>
-      <div className="metric-value">{value}</div>
-      <div className="metric-trend">{trend}</div>
+// Overview Tab
+const OverviewTab = ({ systemHealth, fraudAnalytics }) => (
+  <div className="overview-tab">
+    <div className="metrics-grid">
+      <div className="metric-card highlight">
+        <div className="metric-header">
+          <span className="metric-icon">🛡️</span>
+          <h3>System Status</h3>
+        </div>
+        <div className="metric-value">{systemHealth?.status || 'Unknown'}</div>
+        <div className="metric-change positive">
+          {systemHealth?.metrics?.services_healthy || 0}/{systemHealth?.metrics?.services_total || 0} services healthy
+        </div>
+      </div>
+
+      <div className="metric-card">
+        <div className="metric-header">
+          <span className="metric-icon">🚨</span>
+          <h3>Fraud Rate</h3>
+        </div>
+        <div className="metric-value">{fraudAnalytics?.fraud_stats?.fraud_rate || 0}%</div>
+        <div className="metric-change neutral">
+          {fraudAnalytics?.fraud_stats?.blocked_count || 0} blocked registrations
+        </div>
+      </div>
+
+      <div className="metric-card">
+        <div className="metric-header">
+          <span className="metric-icon">👥</span>
+          <h3>Total Registrations</h3>
+        </div>
+        <div className="metric-value">{fraudAnalytics?.fraud_stats?.total_registrations || 0}</div>
+        <div className="metric-change positive">Real-time monitoring</div>
+      </div>
+
+      <div className="metric-card">
+        <div className="metric-header">
+          <span className="metric-icon">🤖</span>
+          <h3>AI Accuracy</h3>
+        </div>
+        <div className="metric-value">{fraudAnalytics?.ai_model_stats?.model_accuracy || 0}%</div>
+        <div className="metric-change positive">Machine learning powered</div>
+      </div>
+    </div>
+
+    <div className="charts-section">
+      <div className="chart-container">
+        <div className="chart-title">🎯 Risk Distribution</div>
+        <RiskDistributionChart data={fraudAnalytics?.risk_distribution} />
+      </div>
+      
+      <div className="chart-container">
+        <div className="chart-title">⚡ Top Risk Factors</div>
+        <RiskFactorsChart data={fraudAnalytics?.top_risk_factors} />
+      </div>
     </div>
   </div>
 );
 
+// Fraud Analytics Tab
+const FraudTab = ({ fraudAnalytics, realtimeEvents }) => (
+  <div className="fraud-tab">
+    <div className="fraud-stats-grid">
+      <div className="stat-card high-risk">
+        <div className="stat-icon">🔴</div>
+        <div className="stat-content">
+          <div className="stat-value">{fraudAnalytics?.fraud_stats?.high_risk_count || 0}</div>
+          <div className="stat-label">High Risk</div>
+        </div>
+      </div>
+
+      <div className="stat-card medium-risk">
+        <div className="stat-icon">🟡</div>
+        <div className="stat-content">
+          <div className="stat-value">{fraudAnalytics?.fraud_stats?.medium_risk_count || 0}</div>
+          <div className="stat-label">Medium Risk</div>
+        </div>
+      </div>
+
+      <div className="stat-card low-risk">
+        <div className="stat-icon">🟢</div>
+        <div className="stat-content">
+          <div className="stat-value">{fraudAnalytics?.fraud_stats?.low_risk_count || 0}</div>
+          <div className="stat-label">Low Risk</div>
+        </div>
+      </div>
+
+      <div className="stat-card blocked">
+        <div className="stat-icon">⛔</div>
+        <div className="stat-content">
+          <div className="stat-value">{fraudAnalytics?.fraud_stats?.blocked_count || 0}</div>
+          <div className="stat-label">Blocked</div>
+        </div>
+      </div>
+    </div>
+
+    <div className="activity-section">
+      <h3>🔄 Real-time Fraud Events</h3>
+      <div className="activity-feed">
+        {realtimeEvents.slice(0, 10).map((event, i) => (
+          <div key={i} className={`activity-item ${event.severity || 'info'}`}>
+            <div className="activity-time">{new Date(event.timestamp).toLocaleTimeString()}</div>
+            <div className="activity-content">
+              <div className="activity-title">{event.email}</div>
+              <div className="activity-details">
+                Score: {event.fraud_score?.toFixed(2)} | 
+                Risk: {event.risk_level} |
+                Status: {event.blocked ? 'Blocked' : 'Allowed'}
+              </div>
+            </div>
+            <div className={`activity-indicator ${event.blocked ? 'blocked' : 'allowed'}`}></div>
+          </div>
+        ))}
+      </div>
+    </div>
+  </div>
+);
+
+// Services Tab
+const ServicesTab = ({ serviceStatus, temporalStatus }) => (
+  <div className="services-tab">
+    <div className="services-grid">
+      <div className="service-card">
+        <div className="service-header">
+          <span className="service-icon">🖥️</span>
+          <h3>Simple Server</h3>
+          <span className={`status-badge ${serviceStatus?.simple_server?.status || 'unknown'}`}>
+            {serviceStatus?.simple_server?.status || 'Unknown'}
+          </span>
+        </div>
+        <div className="service-details">
+          <p>Port: {serviceStatus?.simple_server?.port || 'N/A'}</p>
+          <p>Features: {serviceStatus?.simple_server?.features?.join(', ') || 'None'}</p>
+        </div>
+      </div>
+
+      <div className="service-card">
+        <div className="service-header">
+          <span className="service-icon">🔧</span>
+          <h3>Main Backend</h3>
+          <span className={`status-badge ${serviceStatus?.main_backend?.status || 'unknown'}`}>
+            {serviceStatus?.main_backend?.status || 'Unknown'}
+          </span>
+        </div>
+        <div className="service-details">
+          <p>Port: {serviceStatus?.main_backend?.port || 'N/A'}</p>
+          <p>Features: {serviceStatus?.main_backend?.features?.join(', ') || 'None'}</p>
+        </div>
+      </div>
+
+      <div className="service-card">
+        <div className="service-header">
+          <span className="service-icon">🌊</span>
+          <h3>Temporal</h3>
+          <span className={`status-badge ${temporalStatus?.temporal_connected ? 'healthy' : 'critical'}`}>
+            {temporalStatus?.temporal_connected ? 'Connected' : 'Disconnected'}
+          </span>
+        </div>
+        <div className="service-details">
+          <p>Server: {temporalStatus?.temporal_server || 'N/A'}</p>
+          <p>Namespace: {temporalStatus?.namespace || 'default'}</p>
+          <p>Task Queue: {temporalStatus?.task_queue || 'N/A'}</p>
+        </div>
+      </div>
+    </div>
+  </div>
+);
+
+// Users Tab
+const UsersTab = ({ userStats }) => (
+  <div className="users-tab">
+    <div className="user-stats-grid">
+      <div className="user-stat-card">
+        <div className="stat-icon">👥</div>
+        <div className="stat-value">{userStats?.total_users || 0}</div>
+        <div className="stat-label">Total Users</div>
+      </div>
+
+      <div className="user-stat-card">
+        <div className="stat-icon">✅</div>
+        <div className="stat-value">{userStats?.verified_users || 0}</div>
+        <div className="stat-label">Verified Users</div>
+      </div>
+
+      <div className="user-stat-card">
+        <div className="stat-icon">⏳</div>
+        <div className="stat-value">{userStats?.pending_verification || 0}</div>
+        <div className="stat-label">Pending Verification</div>
+      </div>
+
+      <div className="user-stat-card">
+        <div className="stat-icon">🔄</div>
+        <div className="stat-value">{userStats?.recent_registrations_24h || 0}</div>
+        <div className="stat-label">New Today</div>
+      </div>
+    </div>
+  </div>
+);
+
+// AI System Tab
+const AITab = ({ aiStatus, fraudAnalytics }) => (
+  <div className="ai-tab">
+    <div className="ai-metrics-grid">
+      <div className="ai-card">
+        <div className="ai-header">
+          <span className="ai-icon">🤖</span>
+          <h3>Ollama Status</h3>
+          <span className={`status-badge ${aiStatus?.ollama_available ? 'healthy' : 'critical'}`}>
+            {aiStatus?.ollama_available ? 'Online' : 'Offline'}
+          </span>
+        </div>
+        <div className="ai-details">
+          <p>Model: {aiStatus?.model_name || 'llama3'}</p>
+          <p>Endpoint: {aiStatus?.endpoint || 'localhost:11434'}</p>
+        </div>
+      </div>
+
+      <div className="ai-card">
+        <div className="ai-header">
+          <span className="ai-icon">⚡</span>
+          <h3>Performance</h3>
+          <span className="status-badge healthy">Active</span>
+        </div>
+        <div className="ai-details">
+          <p>Response Time: {fraudAnalytics?.ai_model_stats?.avg_response_time_ms || 0}ms</p>
+          <p>Accuracy: {fraudAnalytics?.ai_model_stats?.model_accuracy || 0}%</p>
+        </div>
+      </div>
+
+      <div className="ai-card">
+        <div className="ai-header">
+          <span className="ai-icon">📊</span>
+          <h3>Usage Stats</h3>
+          <span className="status-badge healthy">Monitoring</span>
+        </div>
+        <div className="ai-details">
+          <p>Total Requests: {fraudAnalytics?.ai_model_stats?.total_ai_requests || 0}</p>
+          <p>Availability: {fraudAnalytics?.ai_model_stats?.ai_availability || 0}%</p>
+        </div>
+      </div>
+    </div>
+  </div>
+);
+
+// Chart Components
 const RiskDistributionChart = ({ data }) => {
   if (!data) return <div className="no-data">No data available</div>;
-
-  const total = Object.values(data).reduce((sum, count) => sum + count, 0);
+  
+  const total = Object.values(data).reduce((sum, val) => sum + val, 0);
   
   return (
     <div className="risk-chart">
-      {Object.entries(data).map(([level, count]) => {
-        const percentage = total > 0 ? (count / total) * 100 : 0;
-        return (
-          <div key={level} className="risk-bar">
-            <span className="risk-label">{level}</span>
-            <div className="risk-progress">
-              <div 
-                className={`risk-fill ${level}`}
-                style={{ width: `${percentage}%` }}
-              ></div>
-            </div>
-            <span className="risk-count">{count} ({percentage.toFixed(1)}%)</span>
+      {Object.entries(data).map(([key, value]) => (
+        <div key={key} className="risk-bar">
+          <span className="risk-label">{key}</span>
+          <div className="risk-bar-container">
+            <div 
+              className={`risk-bar-fill ${key}`}
+              style={{ width: `${(value / total) * 100}%` }}
+            ></div>
           </div>
-        );
-      })}
+          <span className="risk-value">{value}</span>
+        </div>
+      ))}
     </div>
   );
 };
 
-const FraudTimelineChart = ({ data }) => {
-  if (!data || data.length === 0) return <div className="no-data">No timeline data available</div>;
-
-  const maxValue = Math.max(...data.map(point => point.value));
-
+const RiskFactorsChart = ({ data }) => {
+  if (!data) return <div className="no-data">No data available</div>;
+  
   return (
-    <div className="timeline-chart">
-      {data.map((point, index) => {
-        const height = maxValue > 0 ? (point.value / maxValue) * 100 : 0;
-        return (
-          <div key={index} className="timeline-bar" title={`${point.timestamp}: ${point.value} (${point.label})`}>
+    <div className="risk-factors-chart">
+      {data.slice(0, 5).map((factor, i) => (
+        <div key={i} className="factor-item">
+          <span className="factor-name">{factor.factor.replace(/_/g, ' ')}</span>
+          <div className="factor-bar">
             <div 
-              className="timeline-fill"
-              style={{ height: `${height}%` }}
+              className="factor-fill"
+              style={{ width: `${factor.percentage}%` }}
             ></div>
-            <span className="timeline-time">
-              {new Date(point.timestamp).getHours()}:00
-            </span>
           </div>
-        );
-      })}
+          <span className="factor-percentage">{factor.percentage}%</span>
+        </div>
+      ))}
     </div>
   );
 };
