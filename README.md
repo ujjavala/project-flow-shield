@@ -1,8 +1,8 @@
-# 🔐 AI-Powered Authentication System with Temporal.io
+# 🔐 Authentication System with Temporal.io
 
-A **revolutionary** OAuth2 authentication system that combines **AI-powered security** with **Temporal.io workflows** for enterprise-grade authentication. Features real-time fraud detection, adaptive authentication, behavioral analysis, and distributed transaction management.
+A **production-ready** OAuth2 authentication system that combines **JWT tokens** with **Temporal.io workflows** for enterprise-grade authentication. Features user registration, email verification, password reset, and distributed workflow orchestration.
 
-> **🚀 WORLD'S FIRST**: AI-Enhanced Authentication using Temporal workflows - **Nobody else is doing this!** This project demonstrates the future of authentication security with ML-powered fraud detection, intelligent password analysis, and adaptive security measures.
+> **✅ CURRENTLY WORKING**: Simple JWT-based authentication with working login/register functionality. Temporal workflows implemented but require configuration fixes for full integration.
 
 ## ⚡ TL;DR - Quick Run
 
@@ -11,24 +11,19 @@ A **revolutionary** OAuth2 authentication system that combines **AI-powered secu
 docker-compose up -d
 
 # 2. Open your browser
-open http://localhost:3000        # Main app
-open http://localhost:8081        # Watch Temporal workflows
-open http://localhost:8000/docs   # API documentation
+open http://localhost:3000        # Main app (working!)
+open http://localhost:8081        # Watch Temporal workflows  
+open http://localhost:8001        # Simple server API
 
-# 3. Test the system  
-# Register → john@example.com / SecurePass123!
-# Check logs for verification link: docker-compose logs backend | grep "Verification link"
-# Use the verification link to verify your account, then login!
+# 3. Test the system - WORKS NOW!
+# Login with: test@example.com / password123
+# Register new users via the UI
 
-# 4. Verify Temporal + AI is working
-curl http://localhost:8000/temporal-status           # Check connection
-curl -X POST http://localhost:8000/temporal-ping     # Test workflow
-
-# 5. Test AI-powered features
-curl -X POST http://localhost:8000/user/register \
+# 4. Test simple server directly
+curl http://localhost:8001/health
+curl -X POST http://localhost:8001/user/login \
   -H "Content-Type: application/json" \
-  -d '{"email": "ai-test@example.com", "password": "TestPassword123!", "first_name": "AI", "last_name": "Test"}'
-# Watch for AI fraud_score and ai_insights in response!
+  -d '{"email": "test@example.com", "password": "password123"}'
 ```
 
 > **✅ YES!** `docker-compose up -d` runs **everything** you need:
@@ -529,23 +524,28 @@ docker-compose exec frontend npm test
 - **SQL Injection Protection** via SQLAlchemy ORM
 - **Input Validation** with Pydantic models
 
-## 🌊 Temporal Implementation Status
+## 🎯 Current Working Status
 
-### 🎯 **Current Implementation**
-This demo implements a **production-ready hybrid pattern**:
+### ✅ **What's Working Right Now**
+- **Login/Registration**: Full authentication flow working via simple server
+- **JWT Tokens**: Proper token generation and validation
+- **Frontend UI**: React app on http://localhost:3000
+- **Simple Server**: Lightweight auth server on port 8001
+- **Docker Setup**: All containers running properly
+- **Database**: PostgreSQL with auth tables
 
-**✅ Working Now:**
+### ⚠️ **Temporal Integration Status**
 - **Temporal Server**: Running on `localhost:7233`
 - **Temporal UI**: Available at `http://localhost:8081` 
-- **Temporal Worker**: Processing workflows in background
-- **Simple Workflows**: `PingWorkflow` fully functional
-- **Hybrid Auth Endpoints**: Try Temporal first, fallback to direct operations
-- **Status Monitoring**: Real-time connection and workflow testing
+- **Temporal Worker**: Has workflow validation issues
+- **UserLoginWorkflow**: Implemented but not registered due to sandbox restrictions
+- **AI Workflows**: Implemented but require configuration fixes
 
-**⚠️ Auth Workflows (Currently Fallback Mode):**
-- Authentication endpoints attempt Temporal workflows but fall back to direct database operations due to sandbox restrictions in complex workflows
-- This demonstrates **real-world resilience patterns** - your system never goes down!
-- Each response shows which method was used via the `"method"` field
+### 🔧 **Architecture Decision**
+Currently using a **simple JWT server** for reliable authentication while Temporal workflows are being debugged. This provides:
+- **Immediate functionality**: Login works right now
+- **Production readiness**: Proper JWT implementation
+- **Future migration path**: Can switch to Temporal when issues resolved
 
 ### Why This Pattern is Valuable
 - **🛡️ Reliability**: System works even when Temporal has issues

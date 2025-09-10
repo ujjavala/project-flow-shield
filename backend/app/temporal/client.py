@@ -61,6 +61,7 @@ async def create_worker() -> Worker:
             UserRegistrationWorkflow,
             EmailVerificationWorkflow as UserEmailVerificationWorkflow
         )
+        from app.temporal.workflows.user_login import UserLoginWorkflow
         from app.temporal.activities.email_activities import email_activities
         from app.temporal.activities.user import UserActivities
         from app.temporal.activities.auth import AuthActivities
@@ -73,7 +74,8 @@ async def create_worker() -> Worker:
             PasswordResetWorkflow,
             PasswordResetConfirmationWorkflow,
             UserRegistrationWorkflow,
-            UserEmailVerificationWorkflow
+            UserEmailVerificationWorkflow,
+            UserLoginWorkflow
         ]
         
         # Initialize activity instances
@@ -107,6 +109,9 @@ async def create_worker() -> Worker:
             auth_activities.generate_oauth_authorization_code,
             auth_activities.exchange_authorization_code,
             auth_activities.revoke_access_token,
+            auth_activities.authenticate_user,
+            auth_activities.create_login_tokens,
+            auth_activities.store_login_session,
             # AI Auth activities
             ai_auth_activities.analyze_registration_fraud_risk,
             ai_auth_activities.adaptive_authentication_challenge,

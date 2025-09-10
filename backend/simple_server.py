@@ -8,13 +8,15 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import uvicorn
+import jwt
+from datetime import datetime, timedelta
 
 app = FastAPI(title="Simple Auth Server")
 
 # CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
+    allow_origins=["http://localhost:3000", "http://localhost:8001"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -63,10 +65,33 @@ async def login(user_data: UserLogin):
     if not user["is_active"]:
         raise HTTPException(status_code=401, detail="Account is deactivated")
     
-    # Return mock tokens
+    # Generate proper JWT tokens
+    secret_key = "dev-secret-key-change-in-production"
+    
+    # Access token payload
+    access_payload = {
+        "sub": user["id"],
+        "email": user["email"],
+        "exp": datetime.utcnow() + timedelta(hours=1),
+        "iat": datetime.utcnow(),
+        "type": "access"
+    }
+    
+    # Refresh token payload
+    refresh_payload = {
+        "sub": user["id"],
+        "exp": datetime.utcnow() + timedelta(days=7),
+        "iat": datetime.utcnow(),
+        "type": "refresh"
+    }
+    
+    # Generate tokens
+    access_token = jwt.encode(access_payload, secret_key, algorithm="HS256")
+    refresh_token = jwt.encode(refresh_payload, secret_key, algorithm="HS256")
+    
     return TokenResponse(
-        access_token="mock_access_token_12345",
-        refresh_token="mock_refresh_token_67890", 
+        access_token=access_token,
+        refresh_token=refresh_token,
         expires_in=3600
     )
 
@@ -111,4 +136,5 @@ async def root():
 if __name__ == "__main__":
     print("Starting simple auth server on port 8001...")
     print("Test user: test@example.com / password123")
+    print("Running on port 8001 to avoid Docker conflicts")
     uvicorn.run(app, host="0.0.0.0", port=8001)
