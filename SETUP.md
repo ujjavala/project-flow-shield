@@ -9,8 +9,8 @@
 
 ### 1. Clone and Setup Environment
 ```bash
-git clone <repository-url>
-cd temporal-auth-demo
+git clone https://github.com/ujjavala/project-flow-shield.git
+cd project-flow-shield
 
 # Copy environment template
 cp .env.example .env

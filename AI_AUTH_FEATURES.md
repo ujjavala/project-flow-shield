@@ -140,7 +140,7 @@ This project will **revolutionize how the Temporal community thinks about authen
 ### **1. Basic Setup**
 ```bash
 # Clone and start
-git clone <repo> && cd temporal-auth-demo
+git clone https://github.com/ujjavala/project-flow-shield.git && cd project-flow-shield
 docker-compose up -d
 
 # Install AI dependencies

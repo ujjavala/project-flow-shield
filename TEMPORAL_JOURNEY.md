@@ -597,6 +597,6 @@ The code lives on, the lessons learned are invaluable, and the authentication sy
 
 **Tech Stack**: Temporal.io, FastAPI, React, PostgreSQL, Docker, Ollama AI, Python 3.11+
 
-**GitHub**: [temporal-auth-demo](https://github.com/yourusername/temporal-auth-demo)
+**GitHub**: [project-flow-shield](https://github.com/ujjavala/project-flow-shield)
 
 **Try it yourself**: `docker-compose up -d` and visit `http://localhost:3000`

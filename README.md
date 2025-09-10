@@ -44,8 +44,8 @@ curl -X POST http://localhost:8001/user/login \
 
 ### 1. Clone and Run
 ```bash
-git clone <repository-url>
-cd temporal-auth-demo
+git clone https://github.com/ujjavala/project-flow-shield.git
+cd project-flow-shield
 
 # Start all services (PostgreSQL, Temporal, Backend, Frontend, Worker)
 docker-compose up -d
@@ -355,8 +355,8 @@ open http://localhost:8081  # Temporal UI
 
 ### 1. Clone the Repository
 ```bash
-git clone https://github.com/yourusername/oauth2-temporal-auth.git
-cd oauth2-temporal-auth
+git clone https://github.com/ujjavala/project-flow-shield.git
+cd project-flow-shield
 ```
 
 ### 2. Environment Setup

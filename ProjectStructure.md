@@ -3,7 +3,7 @@
 ## Project Structure
 
 ```
-temporal-auth-demo/
+project-flow-shield/
 ├── README.md                           # 🤖 AI-enhanced project overview
 ├── docker-compose.yml                  # Standard setup
 ├── docker-compose.ai.yml              # 🤖 Full AI-enhanced setup with Redis, GPU support
