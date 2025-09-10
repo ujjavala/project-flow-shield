@@ -114,7 +114,7 @@ services:
     depends_on:
       - backend
     environment:
-      - REACT_APP_API_URL=http://localhost:8001
+      - REACT_APP_API_URL=http://localhost:8000
       - REACT_APP_CLIENT_ID=oauth2-client
     ports:
       - "3000:3000"

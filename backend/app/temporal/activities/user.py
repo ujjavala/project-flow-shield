@@ -30,7 +30,7 @@ class UserActivities:
                 
                 new_user = User(
                     email=user_data.email,
-                    username=user_data.username,
+                    username=user_data.username if user_data.username else None,
                     hashed_password=hashed_password,
                     first_name=user_data.first_name,
                     last_name=user_data.last_name,
