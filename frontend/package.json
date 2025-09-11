@@ -34,7 +34,10 @@
       "node_modules/(?!(axios|@testing-library|react-router-dom)/)"
     ],
     "moduleNameMapper": {
-      "^axios$": "axios/dist/node/axios.cjs"
+      "^axios$": "axios/dist/node/axios.cjs",
+      "^../services/auth$": "<rootDir>/src/services/__mocks__/auth.js",
+      "^../../services/auth$": "<rootDir>/src/services/__mocks__/auth.js",
+      "^../../../services/auth$": "<rootDir>/src/services/__mocks__/auth.js"
     }
   },
   "browserslist": {
