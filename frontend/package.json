@@ -29,6 +29,14 @@
       "react-app/jest"
     ]
   },
+  "jest": {
+    "transformIgnorePatterns": [
+      "node_modules/(?!(axios|@testing-library|react-router-dom)/)"
+    ],
+    "moduleNameMapper": {
+      "^axios$": "axios/dist/node/axios.cjs"
+    }
+  },
   "browserslist": {
     "production": [
       ">0.2%",
