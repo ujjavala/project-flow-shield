@@ -54,7 +54,7 @@ class AuthSagaCompensationError(ApplicationError):
 # Search attributes for advanced observability
 SAGA_TRANSACTION_ID = SearchAttributeKey.for_keyword("SagaTransactionId")
 AUTH_DECISION_ID = SearchAttributeKey.for_keyword("AuthDecisionId")
-USER_RISK_SCORE = SearchAttributeKey.for_double("UserRiskScore")
+USER_RISK_SCORE = SearchAttributeKey.for_float("UserRiskScore")
 AUTH_STATUS = SearchAttributeKey.for_keyword("AuthStatus")
 
 @workflow.defn

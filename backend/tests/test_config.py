@@ -10,7 +10,7 @@ def test_config_loading():
     # Test that settings object exists
     assert hasattr(settings, 'JWT_ACCESS_TOKEN_EXPIRE_MINUTES')
     assert hasattr(settings, 'JWT_REFRESH_TOKEN_EXPIRE_DAYS')
-    assert hasattr(settings, 'SECRET_KEY')
+    assert hasattr(settings, 'JWT_SECRET_KEY')
     
     # Test default values
     assert isinstance(settings.JWT_ACCESS_TOKEN_EXPIRE_MINUTES, int)

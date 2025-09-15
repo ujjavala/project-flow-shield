@@ -42,7 +42,7 @@ class PKCEAuthorizationCode(BaseModel):
     code_challenge_method: str
     expires_at: datetime
     is_used: bool = False
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now())
 
 
 class PKCEUtils:
@@ -91,7 +91,7 @@ class PKCEUtils:
     @staticmethod
     def is_code_expired(expires_at: datetime) -> bool:
         """Check if authorization code has expired"""
-        return datetime.utcnow() > expires_at
+        return datetime.now() > expires_at
     
     @staticmethod
     def create_authorization_code(
@@ -109,7 +109,7 @@ class PKCEUtils:
         RFC 6749 Section 4.1.2: Short lifetime (10 minutes max)
         """
         code = PKCEUtils.generate_authorization_code()
-        expires_at = datetime.utcnow() + timedelta(minutes=expires_in_minutes)
+        expires_at = datetime.now() + timedelta(minutes=expires_in_minutes)
         
         return PKCEAuthorizationCode(
             code=code,

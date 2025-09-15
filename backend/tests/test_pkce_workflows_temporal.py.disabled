@@ -1,0 +1,356 @@
+"""
+Proper Temporal Workflow Tests for PKCE Implementation
+Using Temporal's testing framework for workflow execution with proper test environment
+"""
+import pytest
+from datetime import timedelta
+from typing import Dict, Any
+import asyncio
+
+# Test will be skipped if Temporal is not available (handled by conftest.py)
+pytest.importorskip("temporalio")
+
+from temporalio.client import Client
+from temporalio.worker import Worker
+
+from app.temporal.workflows.pkce_authorization import (
+    PKCEAuthorizationWorkflow,
+    PKCETokenExchangeWorkflow,
+    PKCEWorkflowOrchestrator
+)
+from app.models.pkce import PKCEUtils
+
+
+# Use fixtures from conftest.py for consistent test environment
+
+
+@pytest.mark.temporal
+@pytest.mark.pkce
+class TestPKCEWorkflowsWithTemporal:
+    """Test PKCE workflows using Temporal's testing framework"""
+    
+    async def test_pkce_authorization_workflow_success(
+        self, 
+        temporal_client: Client, 
+        pkce_worker: Worker,
+        sample_pkce_request: Dict[str, Any],
+        test_task_queue: str,
+        workflow_timeout: timedelta
+    ):
+        """Test successful PKCE authorization workflow with Temporal"""
+        # Execute workflow with proper error handling
+        try:
+            result = await temporal_client.execute_workflow(
+                PKCEAuthorizationWorkflow.run,
+                args=[sample_pkce_request, "user-123"],
+                id=f"test-pkce-auth-success-{asyncio.get_event_loop().time()}",
+                task_queue=test_task_queue,
+                execution_timeout=workflow_timeout
+            )
+            
+            # Verify result structure and content
+            assert isinstance(result, dict), "Result should be a dictionary"
+            assert result["success"] is True, f"Expected success=True, got {result}"
+            assert "code" in result, "Authorization code should be present"
+            assert result["state"] == sample_pkce_request["state"], "State should match request"
+            assert result["method"] == "pkce_workflow", "Method should be pkce_workflow"
+            assert len(result["code"]) > 20, "Authorization code should be substantial"
+            
+        except Exception as e:
+            pytest.fail(f"PKCE authorization workflow failed unexpectedly: {e}")
+    
+    async def test_pkce_authorization_workflow_validation_failure(
+        self,
+        temporal_client: Client, 
+        pkce_worker: Worker,
+        invalid_pkce_request: Dict[str, Any],
+        test_task_queue: str,
+        workflow_timeout: timedelta
+    ):
+        """Test PKCE authorization workflow with validation failure"""
+        try:
+            result = await temporal_client.execute_workflow(
+                PKCEAuthorizationWorkflow.run,
+                args=[invalid_pkce_request, "user-123"],
+                id=f"test-pkce-auth-fail-{asyncio.get_event_loop().time()}",
+                task_queue=test_task_queue,
+                execution_timeout=workflow_timeout
+            )
+            
+            # Verify error result
+            assert isinstance(result, dict), "Result should be a dictionary"
+            assert result["success"] is False, "Expected failure result"
+            assert result["error"] == "invalid_request", f"Expected invalid_request error, got {result.get('error')}"
+            assert "Invalid client_id" in result["error_description"], "Should contain validation error message"
+            assert result["method"] == "pkce_workflow", "Method should be pkce_workflow"
+            
+        except Exception as e:
+            pytest.fail(f"PKCE validation failure test failed unexpectedly: {e}")
+    
+    async def test_pkce_token_exchange_workflow_success(
+        self,
+        temporal_client: Client,
+        pkce_worker: Worker,
+        sample_token_request: Dict[str, Any],
+        test_task_queue: str,
+        workflow_timeout: timedelta
+    ):
+        """Test successful PKCE token exchange workflow"""
+        try:
+            result = await temporal_client.execute_workflow(
+                PKCETokenExchangeWorkflow.run,
+                args=[sample_token_request],
+                id=f"test-pkce-token-success-{asyncio.get_event_loop().time()}",
+                task_queue=test_task_queue,
+                execution_timeout=workflow_timeout
+            )
+            
+            # Verify result structure and content
+            assert isinstance(result, dict), "Result should be a dictionary"
+            assert result["success"] is True, f"Expected success=True, got {result}"
+            assert "access_token" in result, "Access token should be present"
+            assert "refresh_token" in result, "Refresh token should be present"
+            assert result["token_type"] == "Bearer", "Token type should be Bearer"
+            assert result["method"] == "pkce_token_workflow", "Method should be pkce_token_workflow"
+            assert result["expires_in"] == 1800, "Token should expire in 30 minutes"
+            assert len(result["access_token"]) > 10, "Access token should be substantial"
+            
+        except Exception as e:
+            pytest.fail(f"PKCE token exchange workflow failed unexpectedly: {e}")
+    
+    @pytest.mark.asyncio
+    async def test_pkce_token_exchange_workflow_invalid_code(self, temporal_client: Client, worker):
+        """Test PKCE token exchange with invalid authorization code"""
+        # Create token request with invalid code
+        token_request = {
+            "grant_type": "authorization_code",
+            "code": "invalid-code",  # This will trigger code not found
+            "redirect_uri": "http://localhost:3000/callback",
+            "client_id": "test-client",
+            "code_verifier": "a" * 43
+        }
+        
+        # Execute workflow
+        result = await temporal_client.execute_workflow(
+            PKCETokenExchangeWorkflow.run,
+            args=[token_request],
+            id="test-pkce-token-invalid-1",
+            task_queue="test-pkce-queue",
+            execution_timeout=timedelta(seconds=30)
+        )
+        
+        # Verify error result
+        assert result["success"] is False
+        assert result["error"] == "invalid_grant"
+        assert "Invalid or expired authorization code" in result["error_description"]
+        assert result["method"] == "pkce_token_workflow"
+    
+    @pytest.mark.asyncio
+    async def test_pkce_token_exchange_workflow_invalid_verifier(self, temporal_client: Client, worker):
+        """Test PKCE token exchange with invalid code verifier"""
+        # Create token request with wrong verifier
+        token_request = {
+            "grant_type": "authorization_code", 
+            "code": "test-auth-code",
+            "redirect_uri": "http://localhost:3000/callback",
+            "client_id": "test-client",
+            "code_verifier": "b" * 43  # Different verifier that won't match challenge
+        }
+        
+        # Execute workflow
+        result = await temporal_client.execute_workflow(
+            PKCETokenExchangeWorkflow.run,
+            args=[token_request],
+            id="test-pkce-token-invalid-verifier-1", 
+            task_queue="test-pkce-queue",
+            execution_timeout=timedelta(seconds=30)
+        )
+        
+        # Verify error result
+        assert result["success"] is False
+        assert result["error"] == "invalid_grant"  # Will be invalid_code_verifier in enhanced workflow
+        assert "Invalid code verifier" in result["error_description"]
+        assert result["method"] == "pkce_token_workflow"
+    
+    @pytest.mark.asyncio
+    async def test_pkce_workflow_orchestrator(self, temporal_client: Client, worker):
+        """Test PKCE workflow orchestrator with child workflows"""
+        # Create test PKCE request for orchestrator
+        pkce_request = {
+            "client_id": "test-client",
+            "redirect_uri": "http://localhost:3000/callback", 
+            "scope": "read write",
+            "state": "orchestrator-test",
+            "code_challenge": PKCEUtils.generate_code_challenge("a" * 43, "S256"),
+            "code_challenge_method": "S256",
+            "response_type": "code"
+        }
+        
+        # Execute orchestrator workflow
+        result = await temporal_client.execute_workflow(
+            PKCEWorkflowOrchestrator.coordinate_pkce_flow,
+            args=[pkce_request, "user-123", "flow-test-1"],
+            id="test-pkce-orchestrator-1",
+            task_queue="test-pkce-queue", 
+            execution_timeout=timedelta(minutes=2)
+        )
+        
+        # Verify orchestration result
+        assert "flow_id" in result
+        assert result["flow_id"] == "flow-test-1"
+        assert result["status"] == "authorization_completed"
+        assert result["next_step"] == "token_exchange"
+        assert "authorization_result" in result
+        
+        # Verify nested authorization result
+        auth_result = result["authorization_result"]
+        assert auth_result["success"] is True
+        assert "code" in auth_result
+        assert auth_result["state"] == "orchestrator-test"
+    
+    @pytest.mark.asyncio
+    async def test_workflow_queries_and_signals(self, temporal_client: Client, worker):
+        """Test Temporal workflow queries and signals"""
+        # Start a long-running workflow
+        pkce_request = {
+            "client_id": "test-client",
+            "redirect_uri": "http://localhost:3000/callback",
+            "code_challenge": PKCEUtils.generate_code_challenge("a" * 43, "S256"),
+            "code_challenge_method": "S256"
+        }
+        
+        # Start workflow without waiting for completion
+        handle = await temporal_client.start_workflow(
+            PKCEAuthorizationWorkflow.run,
+            args=[pkce_request, "user-123"],
+            id="test-pkce-queries-1",
+            task_queue="test-pkce-queue",
+            execution_timeout=timedelta(minutes=1)
+        )
+        
+        # Query workflow status (may need slight delay for workflow to start)
+        import asyncio
+        await asyncio.sleep(0.1)
+        
+        try:
+            status = await handle.query(PKCEAuthorizationWorkflow.get_workflow_status)
+            assert status in ["initializing", "validating_request", "generating_code", "code_generated"]
+            
+            # Query workflow result (might be None if not completed)
+            result = await handle.query(PKCEAuthorizationWorkflow.get_workflow_result)
+            
+            # Send a signal to update security level
+            await handle.signal(PKCEAuthorizationWorkflow.update_security_level, "high")
+            
+        except Exception as e:
+            # Some queries might fail if workflow completes quickly
+            print(f"Query/Signal test note: {e}")
+        
+        # Wait for completion
+        final_result = await handle.result()
+        assert final_result["success"] is True
+
+
+class TestPKCEWorkflowIntegration:
+    """Integration tests for complete PKCE flow"""
+    
+    @pytest.mark.asyncio
+    async def test_complete_pkce_flow_integration(self, temporal_client: Client, worker):
+        """Test complete PKCE flow from authorization to token exchange"""
+        
+        # Step 1: Authorization workflow
+        pkce_request = {
+            "client_id": "integration-test-client",
+            "redirect_uri": "http://localhost:3000/callback",
+            "scope": "read write admin", 
+            "state": "integration-test-state",
+            "code_challenge": PKCEUtils.generate_code_challenge("a" * 43, "S256"),
+            "code_challenge_method": "S256",
+            "response_type": "code"
+        }
+        
+        auth_result = await temporal_client.execute_workflow(
+            PKCEAuthorizationWorkflow.run,
+            args=[pkce_request, "integration-user-123"],
+            id="integration-auth-1",
+            task_queue="test-pkce-queue",
+            execution_timeout=timedelta(seconds=30)
+        )
+        
+        # Verify authorization success
+        assert auth_result["success"] is True
+        authorization_code = auth_result["code"]
+        
+        # Step 2: Token exchange workflow using the authorization code
+        token_request = {
+            "grant_type": "authorization_code",
+            "code": authorization_code,  # Use code from step 1
+            "redirect_uri": "http://localhost:3000/callback",
+            "client_id": "integration-test-client",
+            "code_verifier": "a" * 43  # Same verifier used to generate challenge
+        }
+        
+        token_result = await temporal_client.execute_workflow(
+            PKCETokenExchangeWorkflow.run,
+            args=[token_request],
+            id="integration-token-1",
+            task_queue="test-pkce-queue", 
+            execution_timeout=timedelta(seconds=30)
+        )
+        
+        # Verify token exchange success
+        assert token_result["success"] is True
+        assert "access_token" in token_result
+        assert "refresh_token" in token_result
+        assert token_result["token_type"] == "Bearer"
+        
+        # Verify token properties
+        assert len(token_result["access_token"]) > 10
+        assert token_result["expires_in"] == 1800
+        assert "scope" in token_result
+    
+    @pytest.mark.asyncio
+    async def test_error_handling_and_recovery(self, temporal_client: Client, worker):
+        """Test error handling and workflow recovery scenarios"""
+        
+        # Test scenario: Authorization succeeds, but token exchange fails
+        auth_request = {
+            "client_id": "error-test-client",
+            "redirect_uri": "http://localhost:3000/callback",
+            "code_challenge": PKCEUtils.generate_code_challenge("a" * 43, "S256"),
+            "code_challenge_method": "S256"
+        }
+        
+        # Get authorization code
+        auth_result = await temporal_client.execute_workflow(
+            PKCEAuthorizationWorkflow.run,
+            args=[auth_request, "error-test-user"],
+            id="error-handling-auth-1",
+            task_queue="test-pkce-queue",
+            execution_timeout=timedelta(seconds=30)
+        )
+        
+        assert auth_result["success"] is True
+        
+        # Try token exchange with wrong verifier (should fail)
+        token_request = {
+            "grant_type": "authorization_code",
+            "code": auth_result["code"],
+            "redirect_uri": "http://localhost:3000/callback", 
+            "client_id": "error-test-client",
+            "code_verifier": "wrong" + "x" * 39  # Wrong verifier
+        }
+        
+        token_result = await temporal_client.execute_workflow(
+            PKCETokenExchangeWorkflow.run,
+            args=[token_request],
+            id="error-handling-token-1",
+            task_queue="test-pkce-queue",
+            execution_timeout=timedelta(seconds=30)
+        )
+        
+        # Verify proper error handling
+        assert token_result["success"] is False
+        assert "error" in token_result
+        assert "error_description" in token_result
+        assert token_result["method"] == "pkce_token_workflow"
