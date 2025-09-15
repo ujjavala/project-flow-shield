@@ -13,6 +13,13 @@ from app.config import settings
 from app.database.connection import init_db
 from app.api import user, oauth
 
+# Import security middleware
+from app.middleware.security import (
+    SecurityHeadersMiddleware,
+    TokenTheftProtectionMiddleware,
+    CSPReportMiddleware
+)
+
 # Import AI endpoints (simple version that works with current setup)
 try:
     from app.api import ai_simple
@@ -49,6 +56,14 @@ app = FastAPI(
     version="1.0.0",
     lifespan=lifespan
 )
+
+# Security middleware (order matters - add before CORS)
+app.add_middleware(
+    SecurityHeadersMiddleware,
+    config={"environment": getattr(settings, "ENVIRONMENT", "development")}
+)
+app.add_middleware(TokenTheftProtectionMiddleware)
+app.add_middleware(CSPReportMiddleware)
 
 # CORS middleware
 app.add_middleware(
@@ -150,6 +165,15 @@ async def temporal_ping(message: str = "Hello Temporal!"):
 # Include routers
 app.include_router(user.router, prefix="/user", tags=["user"])
 app.include_router(oauth.router, prefix="/oauth", tags=["oauth2"])
+
+# Include PKCE and BFF routers
+try:
+    from app.api.routes import pkce, bff
+    app.include_router(pkce.router, tags=["pkce"])
+    app.include_router(bff.router, tags=["bff"])
+    logger.info("PKCE and BFF endpoints registered")
+except ImportError as e:
+    logger.warning(f"PKCE/BFF endpoints not available: {e}")
 
 # Include AI router if available
 if AI_AVAILABLE:

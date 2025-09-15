@@ -1143,17 +1143,110 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - ✅ Password Reset Workflows
 - ✅ JWT Token Management
 
-### Phase 2 (Next)
+### Phase 2 (Next - Security Enhancements)
+- 🔄 **PKCE (Proof Key for Code Exchange)** - OAuth 2.1 standard compliance for enhanced security
+- 🔄 **Token Theft Protection** - Multiple defense strategies:
+  - Token-Mediating Backend Pattern (BFF - Backend for Frontend)
+  - Content Security Policy (CSP) implementation
+  - Token binding and rotation mechanisms
 - 🔄 Multi-factor Authentication (MFA)
-- 🔄 Social Login Integration (Google, GitHub)
+- 🔄 Social Login Integration (Google, GitHub) with PKCE
 - 🔄 Admin Dashboard
 - 🔄 API Rate Limiting Dashboard
 
-### Phase 3 (Future)
+### Phase 3 (Advanced Security & Features)
+- 📋 **OAuth 2.1 Full Compliance**
+  - Deprecate Implicit Flow
+  - Enhanced redirect URI validation
+  - Stronger client authentication requirements
+- 📋 **Advanced Token Security**
+  - Sender-Constrained Access Tokens (DPoP)
+  - Token Introspection & Revocation endpoints
+  - Refresh Token Rotation with grace periods
 - 📋 SAML SSO Support
 - 📋 Advanced User Management
 - 📋 Audit Logging
 - 📋 Compliance Features (GDPR, SOC2)
+
+### 🛡️ Security Roadmap Details
+
+#### **PKCE Implementation (OAuth 2.1 Standard)**
+```python
+# Planned PKCE workflow integration
+@workflow.defn 
+class PKCEAuthorizationWorkflow:
+    """OAuth 2.1 compliant PKCE authorization flow"""
+    async def run(self, pkce_request: PKCERequest):
+        # Generate code verifier and challenge
+        code_verifier = secrets.token_urlsafe(32)
+        code_challenge = base64url_encode(sha256(code_verifier))
+        
+        # Store PKCE parameters with authorization code
+        auth_code = await workflow.execute_activity(
+            "generate_authorization_code_with_pkce",
+            pkce_request, code_challenge
+        )
+        
+        return {"auth_code": auth_code, "code_challenge_method": "S256"}
+```
+
+#### **Token Theft Protection Strategies**
+
+**1. Token-Mediating Backend (BFF Pattern)**
+```javascript
+// Frontend never handles tokens directly
+const authenticatedFetch = async (url, options = {}) => {
+  return fetch(`/api/proxy${url}`, {
+    ...options,
+    credentials: 'include', // HTTP-only cookies only
+    headers: {
+      'X-CSRF-Token': await getCSRFToken(),
+      ...options.headers
+    }
+  });
+};
+```
+
+**2. Content Security Policy (CSP)**
+```python
+# Strict CSP headers to prevent token exfiltration
+CSP_POLICY = (
+    "default-src 'self'; "
+    "script-src 'self' 'unsafe-inline'; "
+    "style-src 'self' 'unsafe-inline'; "
+    "connect-src 'self' https://api.temporal.io; "
+    "form-action 'self'; "
+    "base-uri 'self'; "
+    "object-src 'none';"
+)
+```
+
+**3. Enhanced Token Security**
+```python
+@workflow.defn
+class SecureTokenManagementWorkflow:
+    """Advanced token security with binding and rotation"""
+    async def run(self, token_request: TokenRequest):
+        # Generate token with device binding
+        device_fingerprint = await workflow.execute_activity(
+            "generate_device_fingerprint", token_request.device_info
+        )
+        
+        # Create sender-constrained token (DPoP)
+        access_token = await workflow.execute_activity(
+            "create_dpop_bound_token",
+            token_request.user_id, device_fingerprint
+        )
+        
+        # Schedule automatic rotation
+        await workflow.start_child_workflow(
+            TokenRotationWorkflow,
+            args=[access_token.jti],
+            id=f"token-rotation-{access_token.jti}"
+        )
+        
+        return access_token
+```
 
 ---
 
