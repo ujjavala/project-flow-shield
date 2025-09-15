@@ -48,6 +48,20 @@ services:
       retries: 10
       start_period: 30s
 
+  # Redis Cache
+  redis:
+    image: redis:7-alpine
+    container_name: oauth2_redis
+    ports:
+      - "6379:6379"
+    networks:
+      - oauth2_network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   # Backend API
   backend:
     build:
@@ -58,6 +72,8 @@ services:
       postgres:
         condition: service_healthy
       temporal:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     environment:
       - DATABASE_URL=postgresql://oauth2_user:oauth2_password@postgres:5432/oauth2_auth
