@@ -217,6 +217,13 @@ async def login(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Account is deactivated"
             )
+
+        # Check if user has admin role - they should use admin login
+        if hasattr(user, 'role') and user.role in ['admin', 'moderator'] or user.is_superuser:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Admin users must use admin login endpoint: /admin/auth/login"
+            )
         
         # Temporarily disable email verification requirement
         # if not user.is_verified:

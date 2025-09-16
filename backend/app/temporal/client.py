@@ -146,7 +146,7 @@ async def create_worker() -> Worker:
             FraudInvestigationWorkflow
         )
         from app.temporal.activities.analytics_activities import analytics_activities
-        
+
         analytics_workflows = [FraudAnalyticsWorkflow, FraudInvestigationWorkflow]
         analytics_activities_list = [
             analytics_activities.aggregate_fraud_data,
@@ -161,12 +161,65 @@ async def create_worker() -> Worker:
         logger.warning(f"Analytics workflows not available: {e}")
         analytics_workflows = []
         analytics_activities_list = []
+
+    # Import rate limiting workflows if available
+    try:
+        from app.temporal.workflows.rate_limiting_workflow import (
+            RateLimitingWorkflow,
+            RateLimitResetWorkflow,
+            AdaptiveRateLimitingWorkflow
+        )
+        from app.temporal.activities.rate_limiting_activities import (
+            get_rate_limit_config,
+            check_rate_limit_usage,
+            increment_rate_limit_counter,
+            assess_violation_severity,
+            apply_extended_timeout,
+            send_rate_limit_notification,
+            log_rate_limit_event,
+            get_expired_rate_limit_keys,
+            reset_rate_limit_counter,
+            cleanup_old_violations,
+            analyze_system_load,
+            analyze_user_behavior_patterns,
+            calculate_adaptive_limits,
+            update_rate_limits,
+            log_rate_limit_adaptation
+        )
+
+        rate_limiting_workflows = [
+            RateLimitingWorkflow,
+            RateLimitResetWorkflow,
+            AdaptiveRateLimitingWorkflow
+        ]
+        rate_limiting_activities_list = [
+            get_rate_limit_config,
+            check_rate_limit_usage,
+            increment_rate_limit_counter,
+            assess_violation_severity,
+            apply_extended_timeout,
+            send_rate_limit_notification,
+            log_rate_limit_event,
+            get_expired_rate_limit_keys,
+            reset_rate_limit_counter,
+            cleanup_old_violations,
+            analyze_system_load,
+            analyze_user_behavior_patterns,
+            calculate_adaptive_limits,
+            update_rate_limits,
+            log_rate_limit_adaptation
+        ]
+        logger.info("Rate limiting workflows and activities loaded")
+    except ImportError as e:
+        logger.warning(f"Rate limiting workflows not available: {e}")
+        rate_limiting_workflows = []
+        rate_limiting_activities_list = []
     
     client = await get_temporal_client()
     
     # Combine all workflows and activities
-    all_workflows = [PingWorkflow] + email_workflows + analytics_workflows
-    all_activities = email_activities_list + analytics_activities_list
+    all_workflows = [PingWorkflow] + email_workflows + analytics_workflows + rate_limiting_workflows
+    all_activities = email_activities_list + analytics_activities_list + rate_limiting_activities_list
     
     # Create worker with all available workflows
     worker = Worker(

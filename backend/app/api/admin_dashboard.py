@@ -7,9 +7,18 @@ import asyncio
 import logging
 from datetime import datetime, timedelta
 from typing import Dict, Any, List, Optional
-from fastapi import APIRouter, HTTPException, Depends, Query
+from fastapi import APIRouter, HTTPException, Depends, Query, Response
 from pydantic import BaseModel, Field
 import httpx
+
+# Import admin authentication
+from app.utils.admin_auth import (
+    get_admin_user,
+    get_super_admin_user,
+    AdminPermissionChecker,
+    create_admin_session_log,
+    ADMIN_SECURITY_HEADERS
+)
 
 # Import authentication utilities
 try:
@@ -26,6 +35,31 @@ except ImportError:
     ANALYTICS_AVAILABLE = False
 
 logger = logging.getLogger(__name__)
+
+# Mock users data - replace with real database queries
+MOCK_USERS = [
+    {
+        "id": 1,
+        "email": "test@example.com",
+        "is_active": True,
+        "is_verified": True,
+        "created_at": datetime.now() - timedelta(days=30)
+    },
+    {
+        "id": 2,
+        "email": "admin@example.com",
+        "is_active": True,
+        "is_verified": True,
+        "created_at": datetime.now() - timedelta(days=15)
+    },
+    {
+        "id": 3,
+        "email": "user@example.com",
+        "is_active": False,
+        "is_verified": False,
+        "created_at": datetime.now() - timedelta(days=5)
+    }
+]
 
 # Create API router
 router = APIRouter(prefix="/admin", tags=["Admin Dashboard"])
@@ -62,10 +96,23 @@ async def initialize_analytics():
         await analytics_service.initialize()
 
 @router.get("/", response_model=Dict[str, Any])
-async def admin_dashboard_home():
+async def admin_dashboard_home(
+    admin_user = Depends(get_admin_user),
+    response: Response = None
+):
     """Admin dashboard home - overview of all systems"""
+
+    # Add admin security headers
+    if response:
+        for header, value in ADMIN_SECURITY_HEADERS.items():
+            response.headers[header] = value
+
+    # Log admin access
+    await create_admin_session_log(admin_user, "dashboard_access")
+
     return {
-        "message": "Authentication System Admin Dashboard",
+        "message": f"Welcome Admin {admin_user.email}",
+        "admin_role": admin_user.role,
         "timestamp": datetime.now().isoformat(),
         "version": "1.0.0",
         "features": {
@@ -575,9 +622,223 @@ async def mfa_analytics():
         logger.error(f"MFA analytics retrieval failed: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to retrieve MFA analytics: {str(e)}")
 
+@router.get("/rate-limiting")
+async def rate_limiting_metrics(
+    admin_user = Depends(get_admin_user)
+):
+    """Get rate limiting metrics and statistics"""
+    try:
+        # Call the rate limiting API for metrics
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            # Get rate limiting metrics from the rate limiting service
+            headers = {"Authorization": "Bearer admin_token"}  # TODO: Proper admin auth
+            metrics_response = await client.get(
+                "http://localhost:8000/rate-limiting/metrics",
+                headers=headers
+            )
+
+            if metrics_response.status_code == 200:
+                metrics_data = metrics_response.json()
+
+                # Get adaptive limits
+                try:
+                    adaptive_response = await client.get(
+                        "http://localhost:8000/rate-limiting/adaptive-limits",
+                        headers=headers
+                    )
+                    adaptive_data = adaptive_response.json() if adaptive_response.status_code == 200 else {}
+                except Exception:
+                    adaptive_data = {}
+
+                # Enhance with additional analysis
+                current_time = datetime.now()
+
+                # Calculate hourly breakdown (mock data for now)
+                hourly_stats = []
+                for i in range(24):
+                    hour = (current_time - timedelta(hours=i)).strftime("%H:00")
+                    # Distribute requests across hours
+                    allowed = int(metrics_data.get('allowed_requests', 0) / 24) + (i % 3)
+                    blocked = int(metrics_data.get('blocked_requests', 0) / 24) + (i % 5)
+
+                    hourly_stats.append({
+                        "hour": hour,
+                        "allowed": allowed,
+                        "blocked": blocked,
+                        "total": allowed + blocked
+                    })
+
+                return {
+                    "metrics": metrics_data,
+                    "adaptive_limits": adaptive_data,
+                    "hourly_breakdown": list(reversed(hourly_stats)),
+                    "summary": {
+                        "total_requests_24h": metrics_data.get('total_requests', 0),
+                        "block_rate": round(metrics_data.get('violation_rate', 0) * 100, 2),
+                        "most_limited_type": "login" if metrics_data.get('blocked_requests', 0) > 0 else "none",
+                        "active_violations": len(metrics_data.get('top_violators', [])),
+                        "system_health": "healthy" if metrics_data.get('violation_rate', 0) < 0.1 else "warning"
+                    },
+                    "last_updated": current_time.isoformat()
+                }
+            else:
+                # Fallback to minimal data if service unavailable
+                return {
+                    "metrics": {
+                        "total_requests": 0,
+                        "allowed_requests": 0,
+                        "blocked_requests": 0,
+                        "violation_rate": 0.0,
+                        "top_violators": [],
+                        "metrics_by_type": {}
+                    },
+                    "adaptive_limits": {},
+                    "summary": {
+                        "total_requests_24h": 0,
+                        "block_rate": 0.0,
+                        "most_limited_type": "none",
+                        "active_violations": 0,
+                        "system_health": "unknown"
+                    },
+                    "status": "rate_limiting_service_unavailable"
+                }
+
+    except Exception as e:
+        logger.error(f"Rate limiting metrics retrieval failed: {e}")
+        # Return safe fallback data
+        return {
+            "metrics": {
+                "total_requests": 0,
+                "allowed_requests": 0,
+                "blocked_requests": 0,
+                "violation_rate": 0.0,
+                "top_violators": [],
+                "metrics_by_type": {}
+            },
+            "adaptive_limits": {},
+            "summary": {
+                "total_requests_24h": 0,
+                "block_rate": 0.0,
+                "most_limited_type": "none",
+                "active_violations": 0,
+                "system_health": "error"
+            },
+            "error": str(e),
+            "status": "error"
+        }
+
+@router.post("/rate-limiting/actions")
+async def rate_limiting_actions(
+    action: AdminAction,
+    admin_user = Depends(get_admin_user)
+):
+    """Perform rate limiting admin actions"""
+
+    # Check admin permissions for rate limiting
+    if not AdminPermissionChecker.can_access_rate_limiting(admin_user):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Insufficient permissions for rate limiting management"
+        )
+
+    # Log admin action
+    await create_admin_session_log(admin_user, f"rate_limit_action_{action.action}", {
+        "action": action.action,
+        "target": action.target,
+        "parameters": action.parameters
+    })
+
+    try:
+        headers = {"Authorization": f"Bearer {admin_user.id}"}  # Use admin user context
+
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            if action.action == "reset_counters":
+                # Trigger rate limit reset
+                response = await client.post(
+                    "http://localhost:8000/rate-limiting/reset",
+                    headers=headers
+                )
+
+                if response.status_code == 200:
+                    return {
+                        "action": action.action,
+                        "status": "success",
+                        "result": response.json(),
+                        "timestamp": datetime.now().isoformat()
+                    }
+                else:
+                    return {
+                        "action": action.action,
+                        "status": "failed",
+                        "error": f"Reset failed with status {response.status_code}",
+                        "timestamp": datetime.now().isoformat()
+                    }
+
+            elif action.action == "update_adaptive":
+                # Trigger adaptive limits update
+                response = await client.post(
+                    "http://localhost:8000/rate-limiting/adaptive-update",
+                    headers=headers
+                )
+
+                if response.status_code == 200:
+                    return {
+                        "action": action.action,
+                        "status": "success",
+                        "result": response.json(),
+                        "timestamp": datetime.now().isoformat()
+                    }
+                else:
+                    return {
+                        "action": action.action,
+                        "status": "failed",
+                        "error": f"Update failed with status {response.status_code}",
+                        "timestamp": datetime.now().isoformat()
+                    }
+
+            elif action.action == "clear_violations":
+                # Clear violations for a specific identifier
+                identifier = action.parameters.get("identifier")
+                limit_type = action.parameters.get("limit_type", "all")
+
+                if not identifier:
+                    raise HTTPException(status_code=400, detail="Identifier required for clearing violations")
+
+                response = await client.delete(
+                    f"http://localhost:8000/rate-limiting/violations/{identifier}",
+                    headers=headers,
+                    params={"limit_type": limit_type}
+                )
+
+                if response.status_code == 200:
+                    return {
+                        "action": action.action,
+                        "status": "success",
+                        "result": response.json(),
+                        "timestamp": datetime.now().isoformat()
+                    }
+                else:
+                    return {
+                        "action": action.action,
+                        "status": "failed",
+                        "error": f"Clear violations failed with status {response.status_code}",
+                        "timestamp": datetime.now().isoformat()
+                    }
+            else:
+                raise HTTPException(status_code=400, detail=f"Unknown rate limiting action: {action.action}")
+
+    except Exception as e:
+        logger.error(f"Rate limiting action failed: {e}")
+        return {
+            "action": action.action,
+            "status": "error",
+            "error": str(e),
+            "timestamp": datetime.now().isoformat()
+        }
+
 @router.get("/security-overview")
 async def security_overview():
-    """Get comprehensive security overview including MFA, fraud detection, and threats"""
+    """Get comprehensive security overview including MFA, fraud detection, threats, and rate limiting"""
     try:
         if ANALYTICS_AVAILABLE:
             # Use real data from analytics service
@@ -656,6 +917,8 @@ async def test_admin_endpoints():
             "GET /admin/metrics - System metrics",
             "GET /admin/mfa-analytics - MFA analytics and statistics",
             "GET /admin/security-overview - Comprehensive security overview",
+            "GET /admin/rate-limiting - Rate limiting metrics and statistics",
+            "POST /admin/rate-limiting/actions - Rate limiting admin actions",
             "POST /admin/actions - Perform actions",
             "GET /admin/logs - System logs"
         ]

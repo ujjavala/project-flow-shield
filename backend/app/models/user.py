@@ -18,6 +18,7 @@ class User(Base):
     is_active = Column(Boolean, default=True)
     is_verified = Column(Boolean, default=False)
     is_superuser = Column(Boolean, default=False)
+    role = Column(String(20), default='user')  # 'user', 'admin', 'moderator'
     
     # Email verification
     email_verification_token = Column(String(255), nullable=True)

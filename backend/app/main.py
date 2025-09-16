@@ -17,7 +17,8 @@ from app.api import user, oauth
 from app.middleware.security import (
     SecurityHeadersMiddleware,
     TokenTheftProtectionMiddleware,
-    CSPReportMiddleware
+    CSPReportMiddleware,
+    RateLimitingMiddleware
 )
 
 # Import AI endpoints (simple version that works with current setup)
@@ -64,6 +65,11 @@ app.add_middleware(
 )
 app.add_middleware(TokenTheftProtectionMiddleware)
 app.add_middleware(CSPReportMiddleware)
+# Add rate limiting middleware
+app.add_middleware(
+    RateLimitingMiddleware,
+    config={"environment": getattr(settings, "ENVIRONMENT", "development")}
+)
 
 # CORS middleware
 app.add_middleware(
@@ -190,13 +196,37 @@ try:
 except ImportError as e:
     logger.warning(f"Admin analytics endpoints not available: {e}")
 
-# Include Admin Dashboard router  
+# Include Admin Dashboard router
 try:
     from app.api import admin_dashboard
     app.include_router(admin_dashboard.router, tags=["admin-dashboard"])
     logger.info("Admin dashboard endpoints registered")
 except ImportError as e:
     logger.warning(f"Admin dashboard endpoints not available: {e}")
+
+# Include Rate Limiting router
+try:
+    from app.api import rate_limiting
+    app.include_router(rate_limiting.router, tags=["rate-limiting"])
+    logger.info("Rate limiting endpoints registered")
+except ImportError as e:
+    logger.warning(f"Rate limiting endpoints not available: {e}")
+
+# Include User Dashboard router
+try:
+    from app.api import user_dashboard
+    app.include_router(user_dashboard.router, tags=["user-dashboard"])
+    logger.info("User dashboard endpoints registered")
+except ImportError as e:
+    logger.warning(f"User dashboard endpoints not available: {e}")
+
+# Include Admin Authentication router
+try:
+    from app.api import admin_auth
+    app.include_router(admin_auth.router, tags=["admin-auth"])
+    logger.info("Admin authentication endpoints registered")
+except ImportError as e:
+    logger.warning(f"Admin authentication endpoints not available: {e}")
 
 @app.get("/")
 async def root():
