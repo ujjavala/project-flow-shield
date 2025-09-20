@@ -41,8 +41,7 @@ class IAMContext:
 
 async def get_iam_context(
     credentials: HTTPAuthorizationCredentials = Depends(security),
-    db: AsyncSession = Depends(get_db),
-    request: Optional[Request] = None
+    db: AsyncSession = Depends(get_db)
 ) -> IAMContext:
     """Get authenticated user context for IAM operations"""
 
@@ -90,14 +89,11 @@ async def get_iam_context(
         # Extract request context
         ip_address = None
         user_agent = None
-        if request:
-            ip_address = request.client.host if hasattr(request, 'client') else None
-            user_agent = request.headers.get("user-agent")
 
         return IAMContext(
             user=user,
             db=db,
-            request=request,
+            request=None,
             ip_address=ip_address,
             user_agent=user_agent
         )

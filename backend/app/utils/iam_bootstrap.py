@@ -10,7 +10,7 @@ from typing import Dict, List
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
-from app.database.connection import get_db_session
+from app.database.connection import AsyncSessionLocal
 from app.models.user import User
 from app.models.iam import (
     IAMRole, IAMPermission, IAMScope, IAMResource,
@@ -36,7 +36,7 @@ class IAMBootstrap:
         """Run complete IAM bootstrap process"""
 
         try:
-            async with get_db_session() as db:
+            async with AsyncSessionLocal() as db:
                 # Step 1: Create permissions
                 await self._create_permissions(db)
                 logger.info(f"Created {len(self.created_items['permissions'])} permissions")

@@ -568,7 +568,7 @@ async def get_user_roles(
             'total_permissions': len(all_permissions),
             'permissions_by_category': permissions_by_category,
             'high_risk_permissions': len([
-                p for role in user.iam_roles if hasattr(user, 'iam_roles') else []
+                p for role in (user.iam_roles if hasattr(user, 'iam_roles') else [])
                 for p in role.permissions if role.permissions and p.risk_level == 'high'
             ])
         }

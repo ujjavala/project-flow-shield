@@ -4,69 +4,94 @@
 
 ## 🚀 Quick Start
 
+### Option 1: Automated Setup (Recommended)
+```bash
+# Start platform and create all test users automatically
+docker-compose up -d && sleep 30 && ./scripts/setup-users.sh
+```
+
+### Option 2: Manual Setup
 ```bash
 # 1. Start the platform
 docker-compose up -d
 
-# 2. Bootstrap IAM system (first time only)
-curl -X POST http://localhost:8000/bootstrap-iam
+# 2. Wait for services to be ready (30-60 seconds)
+sleep 30
 
-# 3. Access the applications
-open http://localhost:3000        # Main Application
+# 3. Set up test users and IAM
+./scripts/setup-users.sh
+```
+
+### Access the Applications
+```bash
+open http://localhost:3000        # User Dashboard
 open http://localhost:3000/admin/login  # Admin Portal
 open http://localhost:8081        # Temporal UI (workflows)
 ```
 
+**✅ Ready to test!** All user accounts from the credentials section are now available for login.
+
 ## 🔑 Test User Credentials
+
+> **📋 Dashboard Access Summary:**
+> - **Admin Dashboard** (http://localhost:3000/admin/login): Super Admin, Admin, Manager
+> - **User Dashboard** (http://localhost:3000): All users (Regular User, Analyst, Moderator, Guest)
 
 ### 🔴 Super Administrator
 - **Email:** `super.admin@temporal-auth.com`
 - **Username:** `superadmin`
 - **Password:** `SuperAdmin123!`
 - **Role:** Super Administrator (All permissions, Global scope)
-- **Access:** Full system control, all dashboards, all IAM operations
+- **Dashboard Access:** ✅ **Admin Dashboard** + User Dashboard
+- **Features:** Full system control, all dashboards, all IAM operations
 
 ### 🟠 System Administrator
 - **Email:** `admin@temporal-auth.com`
 - **Username:** `admin`
 - **Password:** `Admin123!`
 - **Role:** Administrator (Most admin permissions, Global scope)
-- **Access:** User management, role assignment, system monitoring
+- **Dashboard Access:** ✅ **Admin Dashboard** + User Dashboard
+- **Features:** User management, role assignment, system monitoring
 
 ### 🟡 Team Manager
 - **Email:** `manager@temporal-auth.com`
 - **Username:** `manager`
 - **Password:** `Manager123!`
 - **Role:** Manager (Team oversight, Engineering department scope)
-- **Access:** Team analytics, user viewing, admin dashboard
+- **Dashboard Access:** ✅ **Admin Dashboard** + User Dashboard
+- **Features:** Team analytics, user viewing, admin operations
 
 ### 🟢 Content Moderator
 - **Email:** `moderator@temporal-auth.com`
 - **Username:** `moderator`
 - **Password:** `Moderator123!`
 - **Role:** Moderator (Content moderation, Engineering department scope)
-- **Access:** Content moderation, user dashboard
+- **Dashboard Access:** 👤 **User Dashboard** only
+- **Features:** Content moderation, user profile management
 
 ### 🔵 Data Analyst
 - **Email:** `analyst@temporal-auth.com`
 - **Username:** `analyst`
 - **Password:** `Analyst123!`
 - **Role:** Data Analyst (Analytics access, Marketing department scope)
-- **Access:** Analytics dashboard, reporting features
+- **Dashboard Access:** 👤 **User Dashboard** only
+- **Features:** Analytics dashboard, reporting features
 
 ### ⚪ Regular User
 - **Email:** `user@temporal-auth.com`
 - **Username:** `regularuser`
 - **Password:** `User123!`
 - **Role:** Standard User (Own profile management, Frontend team scope)
-- **Access:** User dashboard, own profile settings
+- **Dashboard Access:** 👤 **User Dashboard** only
+- **Features:** User profile settings, basic functionality
 
 ### ⚫ Guest User
 - **Email:** `guest@temporal-auth.com`
 - **Username:** `guestuser`
 - **Password:** `Guest123!`
 - **Role:** Guest (Limited read-only, No specific scope)
-- **Access:** Basic user dashboard (limited features)
+- **Dashboard Access:** 👤 **User Dashboard** only
+- **Features:** Basic read-only user dashboard (limited features)
 
 ## 📋 Services Overview
 

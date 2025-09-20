@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_, or_, func
 from sqlalchemy.orm import selectinload
 
-from app.database.connection import get_db_session
+from app.database.connection import AsyncSessionLocal
 from app.models.user import User
 from app.models.iam import (
     IAMRole, IAMPermission, IAMScope, IAMResource, IAMPolicy,
@@ -33,7 +33,7 @@ async def validate_role_assignment(request: RoleAssignmentRequest) -> Dict[str, 
     """Validate a role assignment request"""
 
     try:
-        async with get_db_session() as db:
+        async with AsyncSessionLocal() as db:
             # Check if user exists
             user = await db.get(User, request.user_id)
             if not user:
@@ -85,7 +85,7 @@ async def check_approval_requirements(request: RoleAssignmentRequest) -> Dict[st
     """Check if approval is required for role assignment"""
 
     try:
-        async with get_db_session() as db:
+        async with AsyncSessionLocal() as db:
             # Get role information
             role = await db.get(IAMRole, request.role_id)
             if not role:
@@ -125,7 +125,7 @@ async def request_role_assignment_approval(data: Dict[str, Any]) -> Dict[str, An
     approval_info = data['approval_info']
 
     try:
-        async with get_db_session() as db:
+        async with AsyncSessionLocal() as db:
             # Create role request record
             role_request = IAMRoleRequest(
                 requester_id=request.granted_by or request.user_id,
@@ -170,7 +170,7 @@ async def execute_role_assignment(request: RoleAssignmentRequest) -> Dict[str, A
     """Execute the actual role assignment"""
 
     try:
-        async with get_db_session() as db:
+        async with AsyncSessionLocal() as db:
             # Create the role assignment
             expires_at = None
             if request.expires_at:
@@ -243,7 +243,7 @@ async def invalidate_user_permission_cache(data: Dict[str, str]) -> Dict[str, An
     """Invalidate user permission cache"""
 
     try:
-        async with get_db_session() as db:
+        async with AsyncSessionLocal() as db:
             user_id = data['user_id']
 
             # Mark all cached evaluations for this user as expired
@@ -268,7 +268,7 @@ async def check_permission_cache(data: Dict[str, str]) -> Dict[str, Any]:
     """Check permission cache"""
 
     try:
-        async with get_db_session() as db:
+        async with AsyncSessionLocal() as db:
             cache_key = data['cache_key']
 
             cached_query = select(IAMAccessEvaluation).where(
@@ -306,7 +306,7 @@ async def evaluate_direct_permissions(request: PermissionEvaluationRequest) -> D
     """Evaluate user's direct permissions"""
 
     try:
-        async with get_db_session() as db:
+        async with AsyncSessionLocal() as db:
             # For this implementation, users don't have direct permissions
             # All permissions come through roles
             # This could be extended to support direct user permissions
@@ -332,7 +332,7 @@ async def evaluate_role_permissions(request: PermissionEvaluationRequest) -> Dic
     """Evaluate role-based permissions"""
 
     try:
-        async with get_db_session() as db:
+        async with AsyncSessionLocal() as db:
             # Get user with roles and their permissions
             user_query = select(User).options(
                 selectinload(User.iam_roles).selectinload(IAMRole.permissions)
@@ -397,7 +397,7 @@ async def evaluate_scope_permissions(request: PermissionEvaluationRequest) -> Di
     """Evaluate scope-based permissions"""
 
     try:
-        async with get_db_session() as db:
+        async with AsyncSessionLocal() as db:
             if not request.scope_id:
                 return {
                     'has_permission': True,  # No scope restriction
@@ -473,7 +473,7 @@ async def check_resource_ownership(request: PermissionEvaluationRequest) -> Dict
                 'reason': 'no_resource_specified'
             }
 
-        async with get_db_session() as db:
+        async with AsyncSessionLocal() as db:
             # Check if resource exists and user owns it
             resource_query = select(IAMResource).where(
                 and_(
@@ -623,7 +623,7 @@ async def log_access_decision(data: Dict[str, Any]) -> Dict[str, Any]:
     """Log access decision for audit"""
 
     try:
-        async with get_db_session() as db:
+        async with AsyncSessionLocal() as db:
             eval_request = data['eval_request']
             decision = data['decision']
 

@@ -56,7 +56,8 @@ class IAMRole(Base):
 
     # Relationships
     permissions = relationship('IAMPermission', secondary=role_permissions_table, back_populates='roles')
-    users = relationship('User', secondary=user_roles_table, back_populates='iam_roles')
+    users = relationship('User', secondary=user_roles_table, back_populates='iam_roles',
+                        foreign_keys=[user_roles_table.c.user_id, user_roles_table.c.role_id])
 
     def __repr__(self):
         return f"<IAMRole(name={self.name}, display_name={self.display_name})>"
@@ -173,7 +174,7 @@ class IAMScope(Base):
     auto_assign_users = Column(Boolean, default=False)  # Automatically assign new users
 
     # Scope configuration
-    metadata = Column(JSON, nullable=True)
+    scope_metadata = Column(JSON, nullable=True)
     settings = Column(JSON, nullable=True)  # Scope-specific settings
 
     # Geographic or logical boundaries
@@ -187,7 +188,8 @@ class IAMScope(Base):
 
     # Relationships
     parent_scope = relationship('IAMScope', remote_side=[id], backref='child_scopes')
-    users = relationship('User', secondary=user_scopes_table, back_populates='scopes')
+    users = relationship('User', secondary=user_scopes_table, back_populates='scopes',
+                        foreign_keys=[user_scopes_table.c.user_id, user_scopes_table.c.scope_id])
     resources = relationship('IAMResource', back_populates='scope')
 
     def __repr__(self):
@@ -213,7 +215,7 @@ class IAMResource(Base):
     requires_explicit_access = Column(Boolean, default=False)  # Requires explicit permission grants
 
     # Resource metadata
-    metadata = Column(JSON, nullable=True)
+    resource_metadata = Column(JSON, nullable=True)
     tags = Column(JSON, nullable=True)  # Array of tags for categorization
 
     # Timestamps

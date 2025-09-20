@@ -5,6 +5,13 @@ from sqlalchemy.sql import func
 from datetime import datetime
 import uuid
 
+# Import IAM tables for relationships - this will be available after IAM models are loaded
+try:
+    from app.models.iam import user_roles_table, user_scopes_table
+    _IAM_AVAILABLE = True
+except ImportError:
+    _IAM_AVAILABLE = False
+
 class User(Base):
     __tablename__ = "users"
     
@@ -37,9 +44,16 @@ class User(Base):
     # Profile
     profile_picture = Column(String(255), nullable=True)
     bio = Column(Text, nullable=True)
-    
+
     def __repr__(self):
         return f"<User(id={self.id}, email={self.email})>"
+
+# Add IAM relationships if tables are available
+if _IAM_AVAILABLE:
+    User.iam_roles = relationship('IAMRole', secondary=user_roles_table, back_populates='users',
+                                 foreign_keys=[user_roles_table.c.user_id, user_roles_table.c.role_id])
+    User.scopes = relationship('IAMScope', secondary=user_scopes_table, back_populates='users',
+                              foreign_keys=[user_scopes_table.c.user_id, user_scopes_table.c.scope_id])
 
     # IAM Relationships - These will be available after IAM tables are created
     def get_iam_relationships(self):
