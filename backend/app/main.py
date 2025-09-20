@@ -228,6 +228,13 @@ try:
 except ImportError as e:
     logger.warning(f"Admin authentication endpoints not available: {e}")
 
+try:
+    from app.api import behavioral_analytics
+    app.include_router(behavioral_analytics.router, prefix="/behavioral-analytics", tags=["behavioral-analytics"])
+    logger.info("Behavioral analytics endpoints registered")
+except ImportError as e:
+    logger.warning(f"Behavioral analytics endpoints not available: {e}")
+
 @app.get("/")
 async def root():
     return {

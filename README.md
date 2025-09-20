@@ -2,8 +2,6 @@
 
 **Production-ready OAuth2 authentication system with Temporal.io workflows, AI fraud detection, and enterprise-grade security.**
 
-[![Build Status](https://img.shields.io/badge/build-passing-green)](#) [![Docker](https://img.shields.io/badge/docker-ready-blue)](#) [![Tests](https://img.shields.io/badge/tests-151%20passing-green)](#)
-
 ## 🚀 Quick Start
 
 ```bash

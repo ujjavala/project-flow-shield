@@ -1,6 +1,6 @@
 """Common types for Temporal workflows and activities"""
 from dataclasses import dataclass, asdict
-from typing import Optional
+from typing import Optional, Dict, Any
 
 @dataclass
 class UserCreateData:
@@ -38,3 +38,21 @@ class RegistrationRequest:
 class LoginRequest:
     email: str
     password: str
+
+@dataclass
+class BehaviorAnalysisRequest:
+    user_id: str
+    session_id: str
+    event_type: str  # login, action, navigation, etc.
+    ip_address: str
+    user_agent: str
+    timestamp: str
+    geolocation: Optional[Dict[str, Any]] = None
+    device_fingerprint: Optional[Dict[str, Any]] = None
+    additional_context: Optional[Dict[str, Any]] = None
+
+@dataclass
+class RiskAssessmentRequest:
+    user_id: str
+    behavior_data: Dict[str, Any]
+    historical_patterns: Optional[Dict[str, Any]] = None

@@ -214,12 +214,43 @@ async def create_worker() -> Worker:
         logger.warning(f"Rate limiting workflows not available: {e}")
         rate_limiting_workflows = []
         rate_limiting_activities_list = []
+
+    # Import behavioral analytics workflows if available
+    try:
+        from app.temporal.workflows.behavioral_analytics_workflow import (
+            BehaviorAnalyticsWorkflow,
+            ContinuousMonitoringWorkflow
+        )
+        from app.temporal.activities.behavioral_activities import BehavioralActivities
+
+        behavioral_workflows = [
+            BehaviorAnalyticsWorkflow,
+            ContinuousMonitoringWorkflow
+        ]
+
+        # Initialize behavioral activities instance
+        behavioral_activities = BehavioralActivities()
+
+        behavioral_activities_list = [
+            behavioral_activities.collect_user_behavior,
+            behavioral_activities.analyze_login_patterns,
+            behavioral_activities.calculate_risk_score,
+            behavioral_activities.detect_device_fingerprinting,
+            behavioral_activities.analyze_geolocation_patterns,
+            behavioral_activities.update_behavior_baseline,
+            behavioral_activities.trigger_fraud_alert
+        ]
+        logger.info("Behavioral analytics workflows and activities loaded")
+    except ImportError as e:
+        logger.warning(f"Behavioral analytics workflows not available: {e}")
+        behavioral_workflows = []
+        behavioral_activities_list = []
     
     client = await get_temporal_client()
     
     # Combine all workflows and activities
-    all_workflows = [PingWorkflow] + email_workflows + analytics_workflows + rate_limiting_workflows
-    all_activities = email_activities_list + analytics_activities_list + rate_limiting_activities_list
+    all_workflows = [PingWorkflow] + email_workflows + analytics_workflows + rate_limiting_workflows + behavioral_workflows
+    all_activities = email_activities_list + analytics_activities_list + rate_limiting_activities_list + behavioral_activities_list
     
     # Create worker with all available workflows
     worker = Worker(

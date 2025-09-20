@@ -8,6 +8,7 @@ import ServicesTab from './AdminDashboard/tabs/ServicesTab';
 import UsersTab from './AdminDashboard/tabs/UsersTab';
 import AITab from './AdminDashboard/tabs/AITab';
 import MFATab from './AdminDashboard/tabs/MFATab';
+import BehavioralAnalyticsTab from './AdminDashboard/tabs/BehavioralAnalyticsTab';
 import FlowShieldLogo from './common/FlowShieldLogo';
 import './common/FlowShieldLogo.css';
 
@@ -21,6 +22,7 @@ const AdminDashboard = () => {
   const [fraudAnalytics, setFraudAnalytics] = useState(null);
   const [mfaAnalytics, setMfaAnalytics] = useState(null);
   const [securityOverview, setSecurityOverview] = useState(null);
+  const [behaviorAnalytics, setBehaviorAnalytics] = useState(null);
   const [realtimeEvents, setRealtimeEvents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -65,6 +67,7 @@ const AdminDashboard = () => {
         fraudAnalyticsResponse,
         mfaAnalyticsResponse,
         securityOverviewResponse,
+        behaviorAnalyticsResponse,
         realtimeEventsResponse
       ] = await Promise.allSettled([
         fetch(`${baseUrl}/admin/health`, { headers }),
@@ -75,6 +78,7 @@ const AdminDashboard = () => {
         fetch(`${baseUrl}/admin/fraud-analytics`, { headers }),
         fetch(`${baseUrl}/admin/mfa-analytics`, { headers }),
         fetch(`${baseUrl}/admin/security-overview`, { headers }),
+        fetch(`${baseUrl}/behavioral-analytics/admin/behavior-analytics/dashboard`, { headers }),
         fetch(`${baseUrl}/admin/fraud-events/realtime?limit=20`, { headers })
       ]);
 
@@ -109,7 +113,11 @@ const AdminDashboard = () => {
       if (securityOverviewResponse.status === 'fulfilled') {
         setSecurityOverview(await securityOverviewResponse.value.json());
       }
-      
+
+      if (behaviorAnalyticsResponse.status === 'fulfilled') {
+        setBehaviorAnalytics(await behaviorAnalyticsResponse.value.json());
+      }
+
       if (realtimeEventsResponse.status === 'fulfilled') {
         const eventsData = await realtimeEventsResponse.value.json();
         setRealtimeEvents(eventsData?.events || []);
@@ -260,11 +268,17 @@ const AdminDashboard = () => {
         >
           📊 Overview
         </button>
-        <button 
+        <button
           className={`tab-button ${activeTab === 'fraud' ? 'active' : ''}`}
           onClick={() => setActiveTab('fraud')}
         >
           🚨 Fraud Analytics
+        </button>
+        <button
+          className={`tab-button ${activeTab === 'behavior' ? 'active' : ''}`}
+          onClick={() => setActiveTab('behavior')}
+        >
+          🧠 AI Behavior Analytics
         </button>
         <button 
           className={`tab-button ${activeTab === 'services' ? 'active' : ''}`}
@@ -296,6 +310,7 @@ const AdminDashboard = () => {
       <div className="tab-content">
         {activeTab === 'overview' && <OverviewTab systemHealth={systemHealth} fraudAnalytics={fraudAnalytics} />}
         {activeTab === 'fraud' && <FraudTab fraudAnalytics={fraudAnalytics} realtimeEvents={realtimeEvents} />}
+        {activeTab === 'behavior' && <BehavioralAnalyticsTab behaviorAnalytics={behaviorAnalytics} realtimeEvents={realtimeEvents} />}
         {activeTab === 'services' && <ServicesTab serviceStatus={serviceStatus} temporalStatus={temporalStatus} />}
         {activeTab === 'users' && <UsersTab userStats={userStats} />}
         {activeTab === 'ai' && <AITab aiStatus={aiStatus} fraudAnalytics={fraudAnalytics} />}
