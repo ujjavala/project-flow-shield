@@ -8,6 +8,7 @@ CREATE TABLE IF NOT EXISTS  users (
     is_active BOOLEAN DEFAULT TRUE,
     is_verified BOOLEAN DEFAULT FALSE,
     is_superuser BOOLEAN DEFAULT FALSE,
+    role VARCHAR(20) DEFAULT 'user',
     email_verification_token VARCHAR(255),
     email_verification_expires TIMESTAMP,
     password_reset_token VARCHAR(255),
@@ -74,3 +75,61 @@ CREATE TABLE IF NOT EXISTS refresh_tokens (
     created_at TIMESTAMP DEFAULT NOW(),
     is_revoked BOOLEAN DEFAULT FALSE
 );
+
+-- Insert default admin user if not exists
+-- Password: SecurePass123! (bcrypt hashed)
+-- Note: This hash was generated using bcrypt with cost 12
+INSERT INTO users (
+    id,
+    email,
+    username,
+    hashed_password,
+    first_name,
+    last_name,
+    is_active,
+    is_verified,
+    is_superuser,
+    role,
+    created_at
+) VALUES (
+    'admin-user-001',
+    'admin@example.com',
+    'admin',
+    '$2b$12$llBIEekPiz01Z0huRnLxje0LO/BCZw8igZ4i.1wXJ7ypBxErF4w1W',
+    'System',
+    'Administrator',
+    true,
+    true,
+    true,
+    'admin',
+    NOW()
+) ON CONFLICT (email) DO NOTHING;
+
+-- Insert default test user if not exists
+-- Password: TestPass123! (bcrypt hashed)
+-- Note: This hash was generated using bcrypt with cost 12
+INSERT INTO users (
+    id,
+    email,
+    username,
+    hashed_password,
+    first_name,
+    last_name,
+    is_active,
+    is_verified,
+    is_superuser,
+    role,
+    created_at
+) VALUES (
+    'test-user-001',
+    'test@example.com',
+    'testuser',
+    '$2b$12$dGjMwHBqXn/ZFxdkzUGrNukDn9Nn0gTZruu4j/sEGPgJ/vH/KeApO',
+    'Test',
+    'User',
+    true,
+    true,
+    false,
+    'user',
+    NOW()
+) ON CONFLICT (email) DO NOTHING;

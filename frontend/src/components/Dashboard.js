@@ -148,34 +148,51 @@ const Dashboard = () => {
     setLoading(true);
     try {
       setUserProfile(user);
-      
-      // Fetch real system data from backend
+
+      // Fetch user-specific data from backend
+      const token = localStorage.getItem('token');
+      if (!token) {
+        console.warn('No authentication token found');
+        setLoading(false);
+        return;
+      }
+
       const baseUrl = 'http://localhost:8000';
+      const headers = {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      };
+
       try {
-        const [healthResponse, analyticsResponse] = await Promise.allSettled([
-          fetch(`${baseUrl}/admin/health`),
-          fetch(`${baseUrl}/admin/fraud-analytics`)
+        const [profileResponse, activityResponse, securityResponse] = await Promise.allSettled([
+          fetch(`${baseUrl}/dashboard/profile`, { headers }),
+          fetch(`${baseUrl}/dashboard/activity`, { headers }),
+          fetch(`${baseUrl}/dashboard/security`, { headers })
         ]);
 
-        if (healthResponse.status === 'fulfilled') {
-          const healthData = await healthResponse.value.json();
+        if (profileResponse.status === 'fulfilled' && profileResponse.value.ok) {
+          const profileData = await profileResponse.value.json();
+          setUserProfile(profileData);
+        }
+
+        if (activityResponse.status === 'fulfilled' && activityResponse.value.ok) {
+          const activityData = await activityResponse.value.json();
           setSystemStats(prev => ({
             ...prev,
-            activeUsers: healthData.metrics?.active_connections || 1, // You're the active user
-            responseTime: Math.random() * 50 + 10, // Simulated response time
-            cpuUsage: Math.random() * 30 + 10,     // Simulated CPU
-            memoryUsage: Math.random() * 40 + 30,  // Simulated memory
-            networkActivity: Math.random() * 60 + 20 // Simulated network
+            activeUsers: 1, // Current user
+            totalRequests: activityData.total_requests || 0,
+            successRate: activityData.success_rate || 95,
+            responseTime: activityData.avg_response_time || Math.random() * 50 + 10,
+            cpuUsage: Math.random() * 30 + 10,
+            memoryUsage: Math.random() * 40 + 30,
+            networkActivity: Math.random() * 60 + 20
           }));
         }
 
-        if (analyticsResponse.status === 'fulfilled') {
-          const analyticsData = await analyticsResponse.value.json();
-          setSystemStats(prev => ({
-            ...prev,
-            totalRequests: analyticsData.auth_stats?.successful_logins_24h || 0,
-            successRate: analyticsData.auth_stats?.verification_rate || 0
-          }));
+        if (securityResponse.status === 'fulfilled' && securityResponse.value.ok) {
+          const securityData = await securityResponse.value.json();
+          // Update any security-related stats if needed
+          console.log('User security data:', securityData);
         }
       } catch (fetchError) {
         console.warn('Could not fetch real data, using fallback:', fetchError);

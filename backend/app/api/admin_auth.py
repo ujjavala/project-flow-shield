@@ -184,19 +184,22 @@ async def admin_login(
             detail="Admin login failed"
         )
 
+class AdminLogoutRequest(BaseModel):
+    refresh_token: str = Field(..., description="Admin refresh token")
+    logout_all_sessions: Optional[bool] = Field(default=False, description="Logout from all admin sessions")
+
 @router.post("/logout")
 async def admin_logout(
-    refresh_token: str = Field(..., description="Admin refresh token"),
-    logout_all_sessions: Optional[bool] = Field(default=False, description="Logout from all admin sessions"),
+    request: AdminLogoutRequest,
     db: AsyncSession = Depends(get_db)
 ):
     """Admin logout with option to terminate all sessions"""
 
     try:
-        if logout_all_sessions:
+        if request.logout_all_sessions:
             # Find user from refresh token
             result = await db.execute(
-                select(RefreshToken).where(RefreshToken.token == refresh_token)
+                select(RefreshToken).where(RefreshToken.token == request.refresh_token)
             )
             refresh_token_record = result.scalar_one_or_none()
 
@@ -226,7 +229,7 @@ async def admin_logout(
         else:
             # Revoke single refresh token
             result = await db.execute(
-                select(RefreshToken).where(RefreshToken.token == refresh_token)
+                select(RefreshToken).where(RefreshToken.token == request.refresh_token)
             )
             refresh_token_record = result.scalar_one_or_none()
 
@@ -253,9 +256,12 @@ async def admin_logout(
             detail="Admin logout failed"
         )
 
+class AdminRefreshRequest(BaseModel):
+    refresh_token: str = Field(..., description="Admin refresh token")
+
 @router.post("/refresh")
 async def admin_refresh_token(
-    refresh_token: str = Field(..., description="Admin refresh token"),
+    request: AdminRefreshRequest,
     db: AsyncSession = Depends(get_db)
 ):
     """Refresh admin access token"""
@@ -264,7 +270,7 @@ async def admin_refresh_token(
         from app.utils.security import verify_token
 
         # Verify refresh token
-        payload = verify_token(refresh_token)
+        payload = verify_token(request.refresh_token)
         if not payload or payload.get("type") != "refresh":
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
@@ -283,7 +289,7 @@ async def admin_refresh_token(
         # Check if refresh token exists and is not revoked
         result = await db.execute(
             select(RefreshToken).where(
-                RefreshToken.token == refresh_token,
+                RefreshToken.token == request.refresh_token,
                 RefreshToken.user_id == user_id,
                 RefreshToken.is_revoked == False
             )

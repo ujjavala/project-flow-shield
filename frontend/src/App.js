@@ -8,30 +8,21 @@ import Login from './components/Login';
 import Register from './components/Register';
 import Dashboard from './components/Dashboard';
 import AdminDashboard from './components/AdminDashboard';
+import AdminLogin from './components/AdminLogin';
 import ResetPassword from './components/ResetPassword';
 import VerifyEmail from './components/VerifyEmail';
 import About from './components/About';
 
+// Protected Route Components
+import {
+  UserProtectedRoute,
+  AdminProtectedRoute,
+  PublicRoute,
+  AdminPublicRoute
+} from './components/ProtectedRoutes';
+
 // Styles
 import './styles/App.css';
-
-// Protected Route Component
-const ProtectedRoute = ({ children }) => {
-  const { user, loading } = useAuth();
-  
-  if (loading) return <div className="loading">Loading...</div>;
-  
-  return user ? children : <Navigate to="/login" />;
-};
-
-// Public Route Component
-const PublicRoute = ({ children }) => {
-  const { user, loading } = useAuth();
-  
-  if (loading) return <div className="loading">Loading...</div>;
-  
-  return user ? <Navigate to="/dashboard" /> : children;
-};
 
 function AppContent() {
   const { loading, backendOnline } = useAuth();
@@ -54,59 +45,79 @@ function AppContent() {
       <main className="main-content">
         <Routes>
           {/* Public Routes */}
-          <Route 
-            path="/login" 
+          <Route
+            path="/login"
             element={
               <PublicRoute>
                 <Login />
               </PublicRoute>
-            } 
+            }
           />
-          <Route 
-            path="/register" 
+          <Route
+            path="/register"
             element={
               <PublicRoute>
                 <Register />
               </PublicRoute>
-            } 
+            }
           />
-          <Route 
-            path="/reset-password" 
+          <Route
+            path="/reset-password"
             element={
               <PublicRoute>
                 <ResetPassword />
               </PublicRoute>
-            } 
+            }
           />
-          <Route 
-            path="/verify-email" 
+          <Route
+            path="/verify-email"
             element={
               <VerifyEmail />
-            } 
+            }
           />
-          
-          {/* Protected Routes */}
-          <Route 
-            path="/dashboard" 
+
+          {/* Admin Public Routes */}
+          <Route
+            path="/admin/login"
             element={
-              <ProtectedRoute>
+              <AdminPublicRoute>
+                <AdminLogin />
+              </AdminPublicRoute>
+            }
+          />
+
+          {/* User Protected Routes */}
+          <Route
+            path="/dashboard"
+            element={
+              <UserProtectedRoute>
                 <Dashboard />
-              </ProtectedRoute>
-            } 
+              </UserProtectedRoute>
+            }
           />
-          <Route 
-            path="/admin" 
+
+          {/* Admin Protected Routes */}
+          <Route
+            path="/admin"
             element={
-              <ProtectedRoute>
+              <AdminProtectedRoute>
                 <AdminDashboard />
-              </ProtectedRoute>
-            } 
+              </AdminProtectedRoute>
+            }
           />
-          
+          <Route
+            path="/admin/dashboard"
+            element={
+              <AdminProtectedRoute>
+                <AdminDashboard />
+              </AdminProtectedRoute>
+            }
+          />
+
           {/* Public Info Routes */}
           <Route path="/about" element={<About />} />
-          
-          {/* Default Route */}
+
+          {/* Default Route - smart redirect based on authentication */}
           <Route path="/" element={<Navigate to="/dashboard" />} />
         </Routes>
       </main>

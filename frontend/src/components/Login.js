@@ -4,6 +4,7 @@ import { useForm } from 'react-hook-form';
 import { useAuth } from '../context/AuthContext';
 const Login = () => {
   const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
   const { login } = useAuth();
   const navigate = useNavigate();
   
@@ -56,19 +57,28 @@ const Login = () => {
 
           <div className="form-group">
             <label htmlFor="password">Password</label>
-            <input
-              type="password"
-              id="password"
-              {...register('password', {
-                required: 'Password is required',
-                minLength: {
-                  value: 8,
-                  message: 'Password must be at least 8 characters'
-                }
-              })}
-              className={errors.password ? 'error' : ''}
-              placeholder="Enter your password"
-            />
+            <div className="password-input-wrapper">
+              <input
+                type={showPassword ? "text" : "password"}
+                id="password"
+                {...register('password', {
+                  required: 'Password is required',
+                  minLength: {
+                    value: 8,
+                    message: 'Password must be at least 8 characters'
+                  }
+                })}
+                className={errors.password ? 'error' : ''}
+                placeholder="Enter your password"
+              />
+              <button
+                type="button"
+                className="password-toggle"
+                onClick={() => setShowPassword(!showPassword)}
+              >
+                {showPassword ? '👁️' : '👁️‍🗨️'}
+              </button>
+            </div>
             {errors.password && (
               <span className="error-message">{errors.password.message}</span>
             )}
@@ -94,6 +104,12 @@ const Login = () => {
             Don't have an account?{' '}
             <Link to="/register" className="auth-link">
               Sign up here
+            </Link>
+          </p>
+          <p>
+            Administrator?{' '}
+            <Link to="/admin/login" className="auth-link admin-link">
+              🛡️ Admin Portal
             </Link>
           </p>
         </div>

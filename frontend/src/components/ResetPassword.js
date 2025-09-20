@@ -8,6 +8,8 @@ const ResetPassword = () => {
   const token = searchParams.get('token');
   const [loading, setLoading] = useState(false);
   const [isRequestMode, setIsRequestMode] = useState(!token);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const { requestPasswordReset, resetPassword } = useAuth();
   const navigate = useNavigate();
   
@@ -109,23 +111,32 @@ const ResetPassword = () => {
           <form onSubmit={handleSubmit(handlePasswordReset)} className="auth-form">
             <div className="form-group">
               <label htmlFor="password">New Password</label>
-              <input
-                type="password"
-                id="password"
-                {...register('password', {
-                  required: 'Password is required',
-                  minLength: {
-                    value: 8,
-                    message: 'Password must be at least 8 characters'
-                  },
-                  pattern: {
-                    value: /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]/,
-                    message: 'Password must contain at least one uppercase letter, one lowercase letter, one number, and one special character'
-                  }
-                })}
-                className={errors.password ? 'error' : ''}
-                placeholder="Enter your new password"
-              />
+              <div className="password-input-wrapper">
+                <input
+                  type={showPassword ? "text" : "password"}
+                  id="password"
+                  {...register('password', {
+                    required: 'Password is required',
+                    minLength: {
+                      value: 8,
+                      message: 'Password must be at least 8 characters'
+                    },
+                    pattern: {
+                      value: /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]/,
+                      message: 'Password must contain at least one uppercase letter, one lowercase letter, one number, and one special character'
+                    }
+                  })}
+                  className={errors.password ? 'error' : ''}
+                  placeholder="Enter your new password"
+                />
+                <button
+                  type="button"
+                  className="password-toggle"
+                  onClick={() => setShowPassword(!showPassword)}
+                >
+                  {showPassword ? '👁️' : '👁️‍🗨️'}
+                </button>
+              </div>
               {errors.password && (
                 <span className="error-message">{errors.password.message}</span>
               )}
@@ -133,16 +144,25 @@ const ResetPassword = () => {
 
             <div className="form-group">
               <label htmlFor="confirmPassword">Confirm New Password</label>
-              <input
-                type="password"
-                id="confirmPassword"
-                {...register('confirmPassword', {
-                  required: 'Please confirm your password',
-                  validate: value => value === password || 'Passwords do not match'
-                })}
-                className={errors.confirmPassword ? 'error' : ''}
-                placeholder="Confirm your new password"
-              />
+              <div className="password-input-wrapper">
+                <input
+                  type={showConfirmPassword ? "text" : "password"}
+                  id="confirmPassword"
+                  {...register('confirmPassword', {
+                    required: 'Please confirm your password',
+                    validate: value => value === password || 'Passwords do not match'
+                  })}
+                  className={errors.confirmPassword ? 'error' : ''}
+                  placeholder="Confirm your new password"
+                />
+                <button
+                  type="button"
+                  className="password-toggle"
+                  onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                >
+                  {showConfirmPassword ? '👁️' : '👁️‍🗨️'}
+                </button>
+              </div>
               {errors.confirmPassword && (
                 <span className="error-message">{errors.confirmPassword.message}</span>
               )}

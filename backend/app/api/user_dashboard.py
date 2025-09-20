@@ -383,10 +383,14 @@ async def get_user_rate_limits(
             detail="Failed to retrieve rate limit status"
         )
 
+# Request Models
+class ChangePasswordRequest(BaseModel):
+    current_password: str = Field(..., description="Current password")
+    new_password: str = Field(..., description="New password")
+
 @router.post("/change-password")
 async def change_password(
-    current_password: str = Field(..., description="Current password"),
-    new_password: str = Field(..., description="New password"),
+    request: ChangePasswordRequest,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
@@ -396,14 +400,14 @@ async def change_password(
         from app.utils.security import verify_password, hash_password
 
         # Verify current password
-        if not verify_password(current_password, current_user.hashed_password):
+        if not verify_password(request.current_password, current_user.hashed_password):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Current password is incorrect"
             )
 
         # Update password
-        current_user.hashed_password = hash_password(new_password)
+        current_user.hashed_password = hash_password(request.new_password)
         # TODO: Track password change date
         # current_user.password_changed_at = datetime.utcnow()
 

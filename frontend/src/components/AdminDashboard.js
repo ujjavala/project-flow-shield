@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import toast from 'react-hot-toast';
 import './AdminDashboard.css';
 import OverviewTab from './AdminDashboard/tabs/OverviewTab';
 import FraudTab from './AdminDashboard/tabs/FraudTab';
@@ -25,6 +27,7 @@ const AdminDashboard = () => {
   const [activeTab, setActiveTab] = useState('overview');
   const [autoRefresh, setAutoRefresh] = useState(true);
   const [lastUpdated, setLastUpdated] = useState(new Date());
+  const navigate = useNavigate();
 
   useEffect(() => {
     loadAllData();
@@ -37,8 +40,21 @@ const AdminDashboard = () => {
   const loadAllData = async () => {
     try {
       setLoading(true);
-      
+
+      // Get admin authentication token
+      const adminToken = localStorage.getItem('admin_token');
+      const adminRole = localStorage.getItem('admin_role');
+
+      if (!adminToken) {
+        setError('Admin authentication required');
+        return;
+      }
+
       const baseUrl = 'http://localhost:8000';
+      const headers = {
+        'Authorization': `Bearer ${adminToken}`,
+        'Content-Type': 'application/json'
+      };
       
       const [
         healthResponse,
@@ -51,15 +67,15 @@ const AdminDashboard = () => {
         securityOverviewResponse,
         realtimeEventsResponse
       ] = await Promise.allSettled([
-        fetch(`${baseUrl}/admin/health`),
-        fetch(`${baseUrl}/admin/users`),
-        fetch(`${baseUrl}/admin/services`),
-        fetch(`${baseUrl}/admin/ai-status`),
-        fetch(`${baseUrl}/admin/temporal-status`),
-        fetch(`${baseUrl}/admin/fraud-analytics`),
-        fetch(`${baseUrl}/admin/mfa-analytics`),
-        fetch(`${baseUrl}/admin/security-overview`),
-        fetch(`${baseUrl}/admin/fraud-events/realtime?limit=20`)
+        fetch(`${baseUrl}/admin/health`, { headers }),
+        fetch(`${baseUrl}/admin/users`, { headers }),
+        fetch(`${baseUrl}/admin/services`, { headers }),
+        fetch(`${baseUrl}/admin/ai-status`, { headers }),
+        fetch(`${baseUrl}/admin/temporal-status`, { headers }),
+        fetch(`${baseUrl}/admin/fraud-analytics`, { headers }),
+        fetch(`${baseUrl}/admin/mfa-analytics`, { headers }),
+        fetch(`${baseUrl}/admin/security-overview`, { headers }),
+        fetch(`${baseUrl}/admin/fraud-events/realtime?limit=20`, { headers })
       ]);
 
       if (healthResponse.status === 'fulfilled') {
@@ -106,6 +122,33 @@ const AdminDashboard = () => {
       setError('Failed to load dashboard data: ' + err.message);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleAdminLogout = async () => {
+    try {
+      // Call admin logout endpoint
+      const adminToken = localStorage.getItem('admin_token');
+      if (adminToken) {
+        await fetch('http://localhost:8000/admin/auth/logout', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${adminToken}`,
+            'Content-Type': 'application/json'
+          }
+        });
+      }
+    } catch (error) {
+      console.error('Admin logout error:', error);
+    } finally {
+      // Clear admin tokens regardless of API call success
+      localStorage.removeItem('admin_token');
+      localStorage.removeItem('admin_refresh_token');
+      localStorage.removeItem('admin_role');
+      localStorage.removeItem('admin_permissions');
+
+      toast.success('🛡️ Admin session ended successfully');
+      navigate('/admin/login');
     }
   };
 
@@ -169,9 +212,15 @@ const AdminDashboard = () => {
         <div className="header-title">
           <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
             <FlowShieldLogo size={36} />
-            <h1>FlowShield Admin Dashboard</h1>
+            <div>
+              <h1>FlowShield Admin Dashboard</h1>
+              <div className="admin-role-badge">
+                <span className="role-icon">🛡️</span>
+                <span>Admin Role: {localStorage.getItem('admin_role')?.toUpperCase()}</span>
+              </div>
+            </div>
           </div>
-          <p>AI-Powered Security Platform • Temporal-Reliable Authentication</p>
+          <p>AI-Powered Security Platform • Administrative Control Center</p>
         </div>
         
         <div className="header-controls">
@@ -195,6 +244,10 @@ const AdminDashboard = () => {
           
           <button onClick={loadAllData} className="refresh-btn" disabled={loading}>
             {loading ? '⏳' : '🔄'}
+          </button>
+
+          <button onClick={handleAdminLogout} className="logout-btn">
+            🚪 Logout
           </button>
         </div>
       </div>
