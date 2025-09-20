@@ -235,6 +235,30 @@ try:
 except ImportError as e:
     logger.warning(f"Behavioral analytics endpoints not available: {e}")
 
+# Include IAM Management router
+try:
+    from app.api import iam_management
+    app.include_router(iam_management.router, tags=["iam-management"])
+    logger.info("IAM management endpoints registered")
+except ImportError as e:
+    logger.warning(f"IAM management endpoints not available: {e}")
+
+# IAM Bootstrap endpoint
+@app.post("/bootstrap-iam")
+async def bootstrap_iam():
+    """Bootstrap IAM system with initial data"""
+    try:
+        from app.utils.iam_bootstrap import run_iam_bootstrap
+        result = await run_iam_bootstrap()
+        return result
+    except Exception as e:
+        logger.error(f"IAM bootstrap failed: {e}")
+        return {
+            "success": False,
+            "error": str(e),
+            "message": "IAM bootstrap failed"
+        }
+
 @app.get("/")
 async def root():
     return {

@@ -1,4 +1,5 @@
 from sqlalchemy import Column, String, Boolean, DateTime, Text, Integer
+from sqlalchemy.orm import relationship
 from app.database.base import Base
 from sqlalchemy.sql import func
 from datetime import datetime
@@ -39,6 +40,71 @@ class User(Base):
     
     def __repr__(self):
         return f"<User(id={self.id}, email={self.email})>"
+
+    # IAM Relationships - These will be available after IAM tables are created
+    def get_iam_relationships(self):
+        """
+        Dynamic method to set up IAM relationships after tables are created
+        This avoids circular import issues during initial database creation
+        """
+        try:
+            from app.models.iam import (
+                user_roles_table, user_scopes_table, IAMRole, IAMScope,
+                IAMResource, IAMAuditLog, IAMSession, IAMRoleRequest,
+                IAMAccessEvaluation, IAMContextualRole
+            )
+
+            # Add relationships dynamically if not already present
+            if not hasattr(self, 'iam_roles'):
+                self.iam_roles = relationship('IAMRole', secondary=user_roles_table, back_populates='users')
+            if not hasattr(self, 'scopes'):
+                self.scopes = relationship('IAMScope', secondary=user_scopes_table, back_populates='users')
+            if not hasattr(self, 'owned_resources'):
+                self.owned_resources = relationship('IAMResource', foreign_keys=[IAMResource.owner_id])
+            if not hasattr(self, 'audit_logs'):
+                self.audit_logs = relationship('IAMAuditLog', foreign_keys=[IAMAuditLog.actor_id])
+            if not hasattr(self, 'sessions'):
+                self.sessions = relationship('IAMSession', foreign_keys=[IAMSession.user_id])
+
+        except ImportError:
+            # IAM models not available yet
+            pass
+
+    def has_role(self, role_name: str) -> bool:
+        """Check if user has a specific role"""
+        try:
+            return any(
+                role.name == role_name and role.is_active
+                for role in getattr(self, 'iam_roles', [])
+            )
+        except:
+            # Fallback to basic role check
+            return self.role == role_name
+
+    def get_effective_permissions(self) -> list:
+        """Get all effective permissions for this user"""
+        permissions = set()
+        try:
+            for role in getattr(self, 'iam_roles', []):
+                if role.is_active:
+                    for permission in getattr(role, 'permissions', []):
+                        if permission.is_active:
+                            permissions.add(permission.name)
+        except:
+            # Fallback for basic permissions
+            if self.is_superuser:
+                permissions.add('*')  # Super admin has all permissions
+            elif self.role == 'admin':
+                permissions.update([
+                    'user.read', 'user.create', 'user.update',
+                    'admin.dashboard', 'system.manage'
+                ])
+            elif self.role == 'moderator':
+                permissions.update(['user.read', 'content.moderate'])
+            else:
+                permissions.update(['user.read_own', 'user.update_own'])
+
+        return list(permissions)
 
 class RefreshToken(Base):
     __tablename__ = "refresh_tokens"
