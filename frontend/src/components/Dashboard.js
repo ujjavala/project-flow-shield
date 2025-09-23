@@ -2,11 +2,8 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import './Dashboard.css';
 import LineChart from './Dashboard/components/LineChart';
-import NetworkVisualization from './Dashboard/components/NetworkVisualization';
-import ParticleBackground from './Dashboard/components/ParticleBackground';
 import MetricCard from './Dashboard/components/MetricCard';
 import HealthCard from './Dashboard/components/HealthCard';
-import FeatureCard from './Dashboard/components/FeatureCard';
 import FlowShieldLogo from './common/FlowShieldLogo';
 import './common/FlowShieldLogo.css';
 
@@ -14,6 +11,7 @@ const Dashboard = () => {
   const { user, logout } = useAuth();
   const [userProfile, setUserProfile] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [logoutLoading, setLogoutLoading] = useState(false);
   const [systemStats, setSystemStats] = useState({
     uptime: '00:00:00',
     activeUsers: 0,
@@ -26,51 +24,19 @@ const Dashboard = () => {
   });
   const [realtimeData, setRealtimeData] = useState([]);
   const [chartData, setChartData] = useState([]);
-  const [activeConnections, setActiveConnections] = useState([]);
-  const [particleData, setParticleData] = useState([]);
   const chartRef = useRef(null);
   const canvasRef = useRef(null);
-  const particleCanvasRef = useRef(null);
 
   useEffect(() => {
     fetchUserProfile();
     startRealtimeUpdates();
-    initializeParticles();
     initializeCharts();
     return () => {
       clearInterval(window.dashboardInterval);
-      clearInterval(window.particleInterval);
-      clearInterval(window.chartInterval);
+      clearInterval(window.chartIntervalRef);
     };
   }, []);
 
-  const initializeParticles = () => {
-    // Create initial particle data
-    const particles = Array.from({ length: 50 }, (_, i) => ({
-      id: i,
-      x: Math.random() * window.innerWidth,
-      y: Math.random() * window.innerHeight,
-      vx: (Math.random() - 0.5) * 2,
-      vy: (Math.random() - 0.5) * 2,
-      size: Math.random() * 3 + 1,
-      opacity: Math.random() * 0.7 + 0.3,
-      color: `hsl(${200 + Math.random() * 60}, 70%, 60%)`
-    }));
-    setParticleData(particles);
-
-    // Animate particles
-    window.particleInterval = setInterval(() => {
-      setParticleData(prev => 
-        prev.map(particle => ({
-          ...particle,
-          x: particle.x + particle.vx,
-          y: particle.y + particle.vy,
-          x: particle.x > window.innerWidth ? 0 : particle.x < 0 ? window.innerWidth : particle.x,
-          y: particle.y > window.innerHeight ? 0 : particle.y < 0 ? window.innerHeight : particle.y
-        }))
-      );
-    }, 50);
-  };
 
   const initializeCharts = () => {
     // Initialize chart data
@@ -83,18 +49,8 @@ const Dashboard = () => {
     }));
     setChartData(initialData);
 
-    // Generate random connections
-    const connections = Array.from({ length: 8 }, (_, i) => ({
-      id: i,
-      from: { x: Math.random() * 300, y: Math.random() * 200 },
-      to: { x: Math.random() * 300, y: Math.random() * 200 },
-      strength: Math.random(),
-      active: Math.random() > 0.3
-    }));
-    setActiveConnections(connections);
-
     // Update charts periodically
-    window.chartInterval = setInterval(() => {
+    const chartInterval = setInterval(() => {
       const newPoint = {
         time: new Date().toLocaleTimeString(),
         cpu: Math.random() * 100,
@@ -102,18 +58,12 @@ const Dashboard = () => {
         network: Math.random() * 100,
         requests: Math.floor(Math.random() * 100) + 20
       };
-      
+
       setChartData(prev => [...prev.slice(-19), newPoint]);
-      
-      // Update connections
-      setActiveConnections(prev => 
-        prev.map(conn => ({
-          ...conn,
-          strength: Math.random(),
-          active: Math.random() > 0.2
-        }))
-      );
     }, 2000);
+
+    // Store interval reference for cleanup
+    window.chartIntervalRef = chartInterval;
   };
 
   const startRealtimeUpdates = () => {
@@ -212,8 +162,11 @@ const Dashboard = () => {
     }
   };
 
-  const handleLogout = () => {
-    logout();
+  const handleLogout = async () => {
+    setLogoutLoading(true);
+    setTimeout(() => {
+      logout();
+    }, 800); // Small delay to show the loading state
   };
 
   const getHealthStatus = (value, inverted = false) => {
@@ -238,7 +191,6 @@ const Dashboard = () => {
 
   return (
     <div className="modern-dashboard">
-      <ParticleBackground particleData={particleData} />
       
       {/* Header */}
       <div className="dashboard-header">
@@ -249,8 +201,7 @@ const Dashboard = () => {
               <h1>FlowShield Security Center</h1>
             </div>
             <p className="status-line">
-              <span className="status-dot healthy"></span>
-              Intelligent Authentication • AI-Powered Fraud Detection • Temporal-Reliable
+              AI-Powered intelligent authentication and fraud detection ecosystem
             </p>
           </div>
           <div className="header-actions">
@@ -258,158 +209,168 @@ const Dashboard = () => {
               <div className="avatar">{userProfile?.email?.[0]?.toUpperCase() || 'U'}</div>
               <span>{userProfile?.email || 'User'}</span>
             </div>
-            <button onClick={handleLogout} className="logout-btn">
-              <span className="btn-icon">⚡</span>
-              Sign Out
+            <button onClick={handleLogout} className="logout-btn" disabled={logoutLoading}>
+              {logoutLoading ? (
+                <span>Logging you out...</span>
+              ) : (
+                <>
+                  <span className="btn-icon">⚡</span>
+                  <span>Log Out</span>
+                </>
+              )}
             </button>
           </div>
         </div>
       </div>
 
-      {/* Real-time metrics grid */}
+      {/* User Security Dashboard */}
       <div className="metrics-grid">
         <MetricCard
-          icon="👥"
-          title="Active Users"
-          value={systemStats.activeUsers}
-          change={{ text: "+12 from last hour", type: "positive" }}
+          icon="🛡"
+          title="Security Score"
+          value="98.5"
+          change={{ text: "Excellent protection level", type: "positive" }}
           highlight={true}
         />
         <MetricCard
-          icon="🚀"
-          title="Total Requests"
+          icon="🔑"
+          title="Login Sessions"
           value={systemStats.totalRequests.toLocaleString()}
-          change={{ text: `+${Math.floor(Math.random() * 50)} this session`, type: "positive" }}
+          change={{ text: `${Math.floor(Math.random() * 5 + 1)} successful today`, type: "positive" }}
         />
         <MetricCard
-          icon="✅"
-          title="Success Rate"
-          value={`${systemStats.successRate.toFixed(1)}%`}
-          change={{ text: "Excellent performance", type: "positive" }}
+          icon="🔒"
+          title="MFA Status"
+          value="Active"
+          change={{ text: "Two-factor enabled", type: "positive" }}
         />
         <MetricCard
-          icon="⚡"
-          title="Response Time"
-          value={`${Math.round(systemStats.responseTime)}ms`}
-          change={{ text: "Within SLA limits", type: "neutral" }}
+          icon="⚠"
+          title="Threat Detection"
+          value="0 Alerts"
+          change={{ text: "No threats detected", type: "positive" }}
         />
       </div>
 
-      {/* System Health Monitoring */}
+      {/* Account Security Overview */}
       <div className="monitoring-section">
         <div className="section-header">
-          <h2>System Health Monitor</h2>
+          <h2>Account Security Overview</h2>
           <div className="refresh-indicator">
             <div className="pulse"></div>
-            Live monitoring
+            Protected Account
           </div>
         </div>
 
         <div className="health-grid">
           <HealthCard
-            icon="🖥️"
-            title="CPU Usage"
-            value={systemStats.cpuUsage}
-            status={getHealthStatus(systemStats.cpuUsage, true)}
-            chartData={chartData.map(d => ({ cpu: d.cpu }))}
+            icon="🔐"
+            title="Password Strength"
+            value={85}
+            status="healthy"
+            chartData={chartData.map(() => ({ cpu: 85 }))}
             chartColor="#4facfe"
-            chartLabel="CPU-Trend"
+            chartLabel="Strong"
             getHealthStatus={getHealthStatus}
           />
           <HealthCard
-            icon="💾"
-            title="Memory Usage"
-            value={systemStats.memoryUsage}
-            status={getHealthStatus(systemStats.memoryUsage, true)}
-            chartData={chartData.map(d => ({ cpu: d.memory }))}
+            icon="📱"
+            title="Device Trust Score"
+            value={92}
+            status="healthy"
+            chartData={chartData.map(() => ({ cpu: 92 }))}
             chartColor="#00f2fe"
-            chartLabel="Memory-Trend"
+            chartLabel="Trusted"
             getHealthStatus={getHealthStatus}
           />
           <HealthCard
-            icon="🌐"
-            title="Network Activity"
-            value={systemStats.networkActivity}
-            status={getHealthStatus(systemStats.networkActivity)}
-            chartData={chartData.map(d => ({ cpu: d.network }))}
+            icon="🌍"
+            title="Location Security"
+            value={98}
+            status="healthy"
+            chartData={chartData.map(() => ({ cpu: 98 }))}
             chartColor="#00ff88"
-            chartLabel="Network-Trend"
+            chartLabel="Secure"
             getHealthStatus={getHealthStatus}
           />
         </div>
 
-        {/* Network Topology Visualization */}
+        {/* Security Activity Timeline */}
         <div className="network-section">
           <div className="section-header">
-            <h3>Network Topology</h3>
+            <h3>Recent Security Activity</h3>
             <div className="topology-stats">
               <span className="stat-item">
                 <span className="stat-dot active"></span>
-                {activeConnections.filter(c => c.active).length} Active
+                3 Recent Logins
               </span>
               <span className="stat-item">
-                <span className="stat-dot inactive"></span>
-                {activeConnections.filter(c => !c.active).length} Inactive
+                <span className="stat-dot active"></span>
+                0 Security Alerts
               </span>
             </div>
           </div>
-          <NetworkVisualization activeConnections={activeConnections} />
+          <div className="activity-timeline">
+            <div className="activity-item">
+              <div className="activity-icon">🔑</div>
+              <div className="activity-content">
+                <div className="activity-title">Successful Login</div>
+                <div className="activity-details">Chrome on MacOS • 2 hours ago</div>
+              </div>
+            </div>
+            <div className="activity-item">
+              <div className="activity-icon">📱</div>
+              <div className="activity-content">
+                <div className="activity-title">MFA Verification</div>
+                <div className="activity-details">SMS code verified • 2 hours ago</div>
+              </div>
+            </div>
+            <div className="activity-item">
+              <div className="activity-icon">✅</div>
+              <div className="activity-content">
+                <div className="activity-title">Security Scan Complete</div>
+                <div className="activity-details">No threats detected • 1 day ago</div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 
-      {/* Features showcase */}
-      <div className="features-showcase">
+      {/* Account Actions */}
+      <div className="user-actions">
         <div className="section-header">
-          <h2>Authentication System Features</h2>
-          <div className="feature-badge">Temporal.io Powered</div>
+          <h3>Account Management</h3>
+          <p>Manage your security settings and preferences</p>
         </div>
 
-        <div className="features-grid">
-          <FeatureCard
-            icon="🔐"
-            title="OAuth2 + JWT"
-            description="Secure token-based authentication with refresh capabilities"
-            status="Active"
-            animationClass="pulse-glow"
-          />
-          <FeatureCard
-            icon="⚡"
-            title="Temporal Workflows"
-            description="Reliable, durable authentication workflows with automatic retries"
-            status="Running"
-            animationClass="wave-glow"
-          />
-          <FeatureCard
-            icon="🧠"
-            title="AI Fraud Detection"
-            description="Machine learning powered behavioral analysis and risk assessment"
-            status="Learning"
-            animationClass="orbit-glow"
-          />
-          <FeatureCard
-            icon="📊"
-            title="Real-time Analytics"
-            description="Live monitoring and comprehensive dashboard analytics"
-            status="Monitoring"
-            animationClass="data-glow"
-          />
-        </div>
-      </div>
+        <div className="actions-grid">
+          <div className="action-card">
+            <div className="action-icon">🔐</div>
+            <div className="action-content">
+              <h4>Change Password</h4>
+              <p>Update your account password for enhanced security</p>
+              <button className="action-btn outline">Update Password</button>
+            </div>
+          </div>
 
-      {/* Quick actions */}
-      <div className="quick-actions">
-        <button className="action-btn primary" onClick={() => window.location.href = '/admin'}>
-          <span className="btn-icon">📊</span>
-          Admin Dashboard
-        </button>
-        <button className="action-btn secondary" onClick={() => window.open('http://localhost:8081', '_blank')}>
-          <span className="btn-icon">🔄</span>
-          Temporal UI
-        </button>
-        <button className="action-btn secondary" onClick={fetchUserProfile}>
-          <span className="btn-icon">🔄</span>
-          Refresh Data
-        </button>
+          <div className="action-card">
+            <div className="action-icon">📱</div>
+            <div className="action-content">
+              <h4>MFA Settings</h4>
+              <p>Configure two-factor authentication methods</p>
+              <button className="action-btn outline">Manage MFA</button>
+            </div>
+          </div>
+
+          <div className="action-card">
+            <div className="action-icon">📊</div>
+            <div className="action-content">
+              <h4>Security Reports</h4>
+              <p>View detailed security reports and login history</p>
+              <button className="action-btn outline">View Reports</button>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );

@@ -134,7 +134,7 @@ const AdminLogin = () => {
             disabled={isLoading}
           >
             {isLoading ? (
-              <div className="loading-spinner"></div>
+              <span>Logging you in...</span>
             ) : (
               <>
                 <span className="btn-icon">🔐</span>

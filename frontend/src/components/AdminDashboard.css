@@ -1,5 +1,26 @@
 /* Admin Dashboard Styles - Clean & Modern */
 
+/* Universal alignment for ALL admin dashboard sections */
+.admin-dashboard,
+.dashboard-header,
+.dashboard-content,
+.metrics-overview,
+.monitoring-grid,
+.analytics-section,
+.user-management,
+.system-health,
+.tab-content,
+.stats-grid,
+.chart-container,
+.admin-section,
+.content-section {
+  max-width: 1200px !important;
+  margin: 0 auto !important;
+  padding: 2rem !important;
+  width: 100% !important;
+  box-sizing: border-box !important;
+}
+
 .admin-dashboard {
   min-height: 100vh;
   background:
@@ -1182,8 +1203,8 @@
 }
 
 .loading-spinner {
-  width: 40px;
-  height: 40px;
+  width: 30px;
+  height: 30px;
   border: 2px solid rgba(79, 172, 254, 0.2);
   border-top: 2px solid #4facfe;
   border-radius: 50%;

@@ -28,6 +28,7 @@ const AdminDashboard = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [activeTab, setActiveTab] = useState('overview');
+  const [logoutLoading, setLogoutLoading] = useState(false);
   const [autoRefresh, setAutoRefresh] = useState(true);
   const [lastUpdated, setLastUpdated] = useState(new Date());
   const navigate = useNavigate();
@@ -135,6 +136,7 @@ const AdminDashboard = () => {
   };
 
   const handleAdminLogout = async () => {
+    setLogoutLoading(true);
     try {
       // Call admin logout endpoint
       const adminToken = localStorage.getItem('admin_token');
@@ -150,14 +152,17 @@ const AdminDashboard = () => {
     } catch (error) {
       console.error('Admin logout error:', error);
     } finally {
-      // Clear admin tokens regardless of API call success
-      localStorage.removeItem('admin_token');
-      localStorage.removeItem('admin_refresh_token');
-      localStorage.removeItem('admin_role');
-      localStorage.removeItem('admin_permissions');
+      // Small delay to show loading state
+      setTimeout(() => {
+        // Clear admin tokens regardless of API call success
+        localStorage.removeItem('admin_token');
+        localStorage.removeItem('admin_refresh_token');
+        localStorage.removeItem('admin_role');
+        localStorage.removeItem('admin_permissions');
 
-      toast.success('Admin session ended successfully');
-      navigate('/admin/login');
+        toast.success('Admin session ended successfully');
+        navigate('/admin/login');
+      }, 800);
     }
   };
 
@@ -233,8 +238,8 @@ const AdminDashboard = () => {
             {loading ? 'Loading...' : 'Refresh'}
           </button>
 
-          <button onClick={handleAdminLogout} className="logout-btn">
-            Logout
+          <button onClick={handleAdminLogout} className="logout-btn" disabled={logoutLoading}>
+            {logoutLoading ? 'Logging you out...' : 'Logout'}
           </button>
         </div>
       </div>

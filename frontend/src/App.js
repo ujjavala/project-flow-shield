@@ -4,6 +4,7 @@ import { Toaster } from 'react-hot-toast';
 import { AuthProvider, useAuth } from './context/AuthContext';
 
 // Components
+import LandingPage from './components/LandingPage';
 import Login from './components/Login';
 import Register from './components/Register';
 import Dashboard from './components/Dashboard';
@@ -117,8 +118,8 @@ function AppContent() {
           {/* Public Info Routes */}
           <Route path="/about" element={<About />} />
 
-          {/* Default Route - smart redirect based on authentication */}
-          <Route path="/" element={<Navigate to="/dashboard" />} />
+          {/* Default Route - Landing Page */}
+          <Route path="/" element={<LandingPage />} />
         </Routes>
       </main>
       <Toaster position="top-right" />
