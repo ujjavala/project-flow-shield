@@ -41,9 +41,6 @@ const VerifyEmail = () => {
         <div className="auth-card">
           <div className="auth-header">
             <h2>Verifying Email...</h2>
-            <div className="loading-spinner">
-              <div className="spinner"></div>
-            </div>
             <p>Please wait while we verify your email address.</p>
           </div>
         </div>

@@ -194,7 +194,6 @@ const AdminDashboard = () => {
     return (
       <div className="admin-dashboard">
         <div className="loading-container">
-          <div className="loading-spinner"></div>
           <div className="loading-text">
             <h2>Loading Admin Dashboard...</h2>
             <p>Fetching system status, metrics, and analytics</p>

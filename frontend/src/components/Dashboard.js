@@ -180,10 +180,7 @@ const Dashboard = () => {
   if (loading) {
     return (
       <div className="dashboard-loading-container">
-        <div className="loading-spinner">
-          <div className="spinner"></div>
           <div className="loading-text">Loading dashboard...</div>
-        </div>
       </div>
     );
   }

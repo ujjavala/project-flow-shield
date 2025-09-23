@@ -179,8 +179,7 @@ const PredictiveAttackTab = () => {
   if (loading) {
     return (
       <div className="predictive-attack-tab">
-        <div className="loading-spinner">
-          <div className="spinner"></div>
+        <div className="loading-container">
           <p>Loading Predictive Attack Intelligence...</p>
         </div>
       </div>
