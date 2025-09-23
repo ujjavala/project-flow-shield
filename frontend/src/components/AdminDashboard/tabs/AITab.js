@@ -1,7 +1,10 @@
 import React from 'react';
 
-const AITab = ({ aiStatus, fraudAnalytics }) => (
+const AITab = ({ aiStatus, fraudAnalytics, onRefresh }) => (
   <div className="ai-tab">
+    <div className="ai-tab-header">
+      <h2>AI System Status</h2>
+    </div>
     <div className="ai-metrics-grid">
       <div className="ai-card">
         <div className="ai-header">

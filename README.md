@@ -108,8 +108,11 @@ open http://localhost:8081        # Temporal UI (workflows)
 ### 🔐 Authentication & Security
 - **OAuth2 Authentication** - JWT tokens with secure sessions
 - **AI Fraud Detection** - Real-time risk scoring with ML models
+- **🚀 Predictive Attack Simulation** - Self-defending system that safely attacks itself for security testing
+- **AI-Powered Threat Intelligence** - Local ML models for vulnerability prediction
 - **Rate Limiting** - DDoS protection & adaptive API throttling
 - **Security Headers** - CSRF, CORS, XSS protection
+- **Docker-Isolated Security Testing** - Safe attack simulation environments
 - **Password Visibility** - User-friendly eye icons on password fields
 
 ### 👥 Identity & Access Management (IAM)
@@ -122,9 +125,10 @@ open http://localhost:8081        # Temporal UI (workflows)
 - **Scope Hierarchy** - Organization → Department → Team → Resource
 
 ### 🎯 Management Dashboards
-- **Admin Dashboard** - System monitoring, user management, IAM controls
-- **User Dashboard** - Role-specific features, profile management
-- **Analytics Dashboard** - Usage metrics, security insights
+- **✨ Enhanced Admin Dashboard** - Fancy UI with advanced animations, system monitoring, predictive attack controls
+- **✨ Enhanced User Dashboard** - Modern glassmorphism design with real-time metrics and particle effects
+- **🚀 Predictive Attack Dashboard** - Real-time security simulation monitoring and control center
+- **Analytics Dashboard** - Advanced behavioral analytics with AI-powered insights
 - **IAM Management UI** - Role/permission assignment, scope management
 
 ### 🔄 Workflow Engine

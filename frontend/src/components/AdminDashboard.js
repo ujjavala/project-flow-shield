@@ -9,6 +9,7 @@ import UsersTab from './AdminDashboard/tabs/UsersTab';
 import AITab from './AdminDashboard/tabs/AITab';
 import MFATab from './AdminDashboard/tabs/MFATab';
 import BehavioralAnalyticsTab from './AdminDashboard/tabs/BehavioralAnalyticsTab';
+import PredictiveAttackTab from './AdminDashboard/tabs/PredictiveAttackTab';
 import FlowShieldLogo from './common/FlowShieldLogo';
 import './common/FlowShieldLogo.css';
 
@@ -155,7 +156,7 @@ const AdminDashboard = () => {
       localStorage.removeItem('admin_role');
       localStorage.removeItem('admin_permissions');
 
-      toast.success('🛡️ Admin session ended successfully');
+      toast.success('Admin session ended successfully');
       navigate('/admin/login');
     }
   };
@@ -173,14 +174,14 @@ const AdminDashboard = () => {
       const result = await response.json();
       
       if (result.status === 'success') {
-        alert(`✅ ${action} successful!\n${JSON.stringify(result.result, null, 2)}`);
+        alert(`${action} successful!\n${JSON.stringify(result.result, null, 2)}`);
       } else {
-        alert(`❌ ${action} failed: ${result.error}`);
+        alert(`${action} failed: ${result.error}`);
       }
       
       await loadAllData();
     } catch (err) {
-      alert(`❌ Action failed: ${err.message}`);
+      alert(`Action failed: ${err.message}`);
     }
   };
 
@@ -190,7 +191,7 @@ const AdminDashboard = () => {
         <div className="loading-container">
           <div className="loading-spinner"></div>
           <div className="loading-text">
-            <h2>🚀 Loading Admin Dashboard...</h2>
+            <h2>Loading Admin Dashboard...</h2>
             <p>Fetching system status, metrics, and analytics</p>
           </div>
         </div>
@@ -206,7 +207,7 @@ const AdminDashboard = () => {
           <h2>Dashboard Error</h2>
           <p>{error}</p>
           <button onClick={loadAllData} className="retry-btn">
-            🔄 Retry
+            Retry
           </button>
         </div>
       </div>
@@ -222,87 +223,71 @@ const AdminDashboard = () => {
             <FlowShieldLogo size={36} />
             <div>
               <h1>FlowShield Admin Dashboard</h1>
-              <div className="admin-role-badge">
-                <span className="role-icon">🛡️</span>
-                <span>Admin Role: {localStorage.getItem('admin_role')?.toUpperCase()}</span>
-              </div>
             </div>
           </div>
           <p>AI-Powered Security Platform • Administrative Control Center</p>
         </div>
         
         <div className="header-controls">
-          <div className="status-indicator">
-            <span className={`status-dot ${systemHealth?.status || 'unknown'}`}></span>
-            <span>System {systemHealth?.status || 'Unknown'}</span>
-          </div>
-          
-          <div className="last-updated">
-            Last: {lastUpdated.toLocaleTimeString()}
-          </div>
-          
-          <label className="auto-refresh-toggle">
-            <input 
-              type="checkbox" 
-              checked={autoRefresh} 
-              onChange={(e) => setAutoRefresh(e.target.checked)}
-            />
-            Auto-refresh
-          </label>
-          
           <button onClick={loadAllData} className="refresh-btn" disabled={loading}>
-            {loading ? '⏳' : '🔄'}
+            {loading ? 'Loading...' : 'Refresh'}
           </button>
 
           <button onClick={handleAdminLogout} className="logout-btn">
-            🚪 Logout
+            Logout
           </button>
         </div>
       </div>
 
       {/* Tab Navigation */}
       <div className="dashboard-tabs">
-        <button 
+        <button
           className={`tab-button ${activeTab === 'overview' ? 'active' : ''}`}
           onClick={() => setActiveTab('overview')}
         >
-          📊 Overview
+          Overview
+        </button>
+        <button
+          className={`tab-button ${activeTab === 'services' ? 'active' : ''}`}
+          onClick={() => setActiveTab('services')}
+        >
+          Services
         </button>
         <button
           className={`tab-button ${activeTab === 'fraud' ? 'active' : ''}`}
           onClick={() => setActiveTab('fraud')}
         >
-          🚨 Fraud Analytics
+          Fraud Analytics
         </button>
         <button
           className={`tab-button ${activeTab === 'behavior' ? 'active' : ''}`}
           onClick={() => setActiveTab('behavior')}
         >
-          🧠 AI Behavior Analytics
+          AI Behavior
         </button>
-        <button 
-          className={`tab-button ${activeTab === 'services' ? 'active' : ''}`}
-          onClick={() => setActiveTab('services')}
+        <button
+          className={`tab-button ${activeTab === 'predictive' ? 'active' : ''}`}
+          onClick={() => setActiveTab('predictive')}
         >
-          🔧 Services
+          Predictive Attack
         </button>
-        <button 
-          className={`tab-button ${activeTab === 'users' ? 'active' : ''}`}
-          onClick={() => setActiveTab('users')}
-        >
-          👥 Users
-        </button>
-        <button 
-          className={`tab-button ${activeTab === 'ai' ? 'active' : ''}`}
-          onClick={() => setActiveTab('ai')}
-        >
-          🤖 AI System
-        </button>
-        <button 
+        <button
           className={`tab-button ${activeTab === 'mfa' ? 'active' : ''}`}
           onClick={() => setActiveTab('mfa')}
         >
-          <FlowShieldLogo size={18} /> MFA Security
+          MFA Security
+        </button>
+        <button
+          className={`tab-button ${activeTab === 'users' ? 'active' : ''}`}
+          onClick={() => setActiveTab('users')}
+        >
+          Users
+        </button>
+        <button
+          className={`tab-button ${activeTab === 'ai' ? 'active' : ''}`}
+          onClick={() => setActiveTab('ai')}
+        >
+          AI System
         </button>
       </div>
 
@@ -313,8 +298,9 @@ const AdminDashboard = () => {
         {activeTab === 'behavior' && <BehavioralAnalyticsTab behaviorAnalytics={behaviorAnalytics} realtimeEvents={realtimeEvents} />}
         {activeTab === 'services' && <ServicesTab serviceStatus={serviceStatus} temporalStatus={temporalStatus} />}
         {activeTab === 'users' && <UsersTab userStats={userStats} />}
-        {activeTab === 'ai' && <AITab aiStatus={aiStatus} fraudAnalytics={fraudAnalytics} />}
+        {activeTab === 'ai' && <AITab aiStatus={aiStatus} fraudAnalytics={fraudAnalytics} onRefresh={loadAllData} />}
         {activeTab === 'mfa' && <MFATab mfaAnalytics={mfaAnalytics} securityOverview={securityOverview} />}
+        {activeTab === 'predictive' && <PredictiveAttackTab />}
       </div>
     </div>
   );

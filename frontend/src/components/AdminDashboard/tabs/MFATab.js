@@ -26,8 +26,8 @@ const MFATab = ({ mfaAnalytics, securityOverview }) => (
             <div className="mfa-stat-label">Failed</div>
           </div>
           <div className="stat-item">
-            <div className="stat-number">{(mfaAnalytics?.attempts_24h?.success_rate * 100)?.toFixed(1) || 0}%</div>
-            <div className="mfa-stat-label">Success Rate</div>
+            <div className="stat-number">{(mfaAnalytics?.attempts_24h?.success_rate * 100)?.toFixed(0) || 0}%</div>
+            <div className="mfa-stat-label">Success</div>
           </div>
         </div>
       </div>

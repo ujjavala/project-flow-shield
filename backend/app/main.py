@@ -235,6 +235,14 @@ try:
 except ImportError as e:
     logger.warning(f"Behavioral analytics endpoints not available: {e}")
 
+# Include Predictive Attack Simulation router
+try:
+    from app.api import predictive_attack
+    app.include_router(predictive_attack.router, tags=["predictive-attack"])
+    logger.info("Predictive attack simulation endpoints registered")
+except ImportError as e:
+    logger.warning(f"Predictive attack simulation endpoints not available: {e}")
+
 # Include IAM Management router
 try:
     from app.api import iam_management

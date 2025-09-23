@@ -16,8 +16,10 @@ const BehavioralAnalyticsTab = ({ behaviorAnalytics, realtimeEvents }) => {
       setLoading(true);
       const adminToken = localStorage.getItem('admin_token');
 
+      const baseUrl = 'http://localhost:8000';
+
       // Load fraud alerts
-      const alertsResponse = await fetch(`${process.env.REACT_APP_API_URL}/behavioral-analytics/admin/fraud-alerts?limit=20`, {
+      const alertsResponse = await fetch(`${baseUrl}/behavioral-analytics/admin/fraud-alerts?limit=20`, {
         headers: {
           'Authorization': `Bearer ${adminToken}`,
           'Content-Type': 'application/json'
@@ -30,7 +32,7 @@ const BehavioralAnalyticsTab = ({ behaviorAnalytics, realtimeEvents }) => {
       }
 
       // Load dashboard data
-      const dashboardResponse = await fetch(`${process.env.REACT_APP_API_URL}/behavioral-analytics/admin/behavior-analytics/dashboard`, {
+      const dashboardResponse = await fetch(`${baseUrl}/behavioral-analytics/admin/behavior-analytics/dashboard`, {
         headers: {
           'Authorization': `Bearer ${adminToken}`,
           'Content-Type': 'application/json'
@@ -52,7 +54,8 @@ const BehavioralAnalyticsTab = ({ behaviorAnalytics, realtimeEvents }) => {
   const resolveAlert = async (alertId) => {
     try {
       const adminToken = localStorage.getItem('admin_token');
-      const response = await fetch(`${process.env.REACT_APP_API_URL}/behavioral-analytics/admin/fraud-alerts/${alertId}/resolve`, {
+      const baseUrl = 'http://localhost:8000';
+      const response = await fetch(`${baseUrl}/behavioral-analytics/admin/fraud-alerts/${alertId}/resolve`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${adminToken}`,
@@ -98,9 +101,6 @@ const BehavioralAnalyticsTab = ({ behaviorAnalytics, realtimeEvents }) => {
             <option value="30d">Last 30 Days</option>
           </select>
         </div>
-        <button className="refresh-btn" onClick={loadBehavioralData} disabled={loading}>
-          🔄 {loading ? 'Loading...' : 'Refresh'}
-        </button>
       </div>
 
       {/* Overview Stats */}
