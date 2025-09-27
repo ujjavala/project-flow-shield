@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
+import { FiAlertTriangle } from 'react-icons/fi';
 import './AdminDashboard.css';
 import OverviewTab from './AdminDashboard/tabs/OverviewTab';
 import FraudTab from './AdminDashboard/tabs/FraudTab';
@@ -207,7 +208,7 @@ const AdminDashboard = () => {
     return (
       <div className="admin-dashboard">
         <div className="error-container">
-          <div className="error-icon">⚠️</div>
+          <div className="error-icon icon-warning icon-large"><FiAlertTriangle /></div>
           <h2>Dashboard Error</h2>
           <p>{error}</p>
           <button onClick={loadAllData} className="retry-btn">

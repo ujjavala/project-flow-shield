@@ -1,0 +1,191 @@
+/* Lucid React Icons Theme Styling */
+
+/* Default icon sizing and colors */
+.lucid-Icon {
+  width: 20px;
+  height: 20px;
+  color: #ffffff !important;
+  fill: currentColor !important;
+}
+
+/* Force visibility for all Lucid icons */
+svg.lucid-Icon {
+  color: #ffffff !important;
+  fill: currentColor !important;
+}
+
+/* Override any black/default colors */
+svg[class*="lucid"] {
+  color: #ffffff !important;
+  fill: currentColor !important;
+}
+
+/* Alternative selector patterns */
+[class*="Icon"] svg,
+svg[data-lucid="true"] {
+  color: #ffffff !important;
+  fill: currentColor !important;
+}
+
+/* Specific icon color themes */
+.icon-success .lucid-Icon {
+  color: #00ff88 !important;
+}
+
+.icon-danger .lucid-Icon {
+  color: #ff4444 !important;
+}
+
+.icon-warning .lucid-Icon {
+  color: #ffa500 !important;
+}
+
+.icon-primary .lucid-Icon {
+  color: #4facfe !important;
+}
+
+.icon-secondary .lucid-Icon {
+  color: #00f2fe !important;
+}
+
+.icon-white .lucid-Icon {
+  color: #ffffff !important;
+}
+
+/* Size variations */
+.icon-small .lucid-Icon {
+  width: 16px;
+  height: 16px;
+}
+
+.icon-medium .lucid-Icon {
+  width: 24px;
+  height: 24px;
+}
+
+.icon-large .lucid-Icon {
+  width: 32px;
+  height: 32px;
+}
+
+.icon-xlarge .lucid-Icon {
+  width: 48px;
+  height: 48px;
+}
+
+/* Specific component styling */
+.metric-icon .lucid-Icon,
+.mfa-icon .lucid-Icon,
+.health-icon .lucid-Icon,
+.activity-icon .lucid-Icon,
+.action-icon .lucid-Icon {
+  width: 24px;
+  height: 24px;
+  color: #4facfe;
+}
+
+.btn-icon .lucid-Icon,
+.password-toggle .lucid-Icon {
+  width: 18px;
+  height: 18px;
+  color: #ffffff;
+}
+
+.badge-icon .lucid-Icon {
+  width: 20px;
+  height: 20px;
+  color: #4facfe;
+}
+
+.chart-title .lucid-Icon {
+  width: 20px;
+  height: 20px;
+  color: #00f2fe;
+  margin-right: 8px;
+}
+
+/* Success/Error/Warning states */
+.success-icon .lucid-Icon {
+  width: 48px;
+  height: 48px;
+  color: #00ff88;
+}
+
+.error-icon .lucid-Icon {
+  width: 48px;
+  height: 48px;
+  color: #ff4444;
+}
+
+.warning-icon .lucid-Icon {
+  width: 48px;
+  height: 48px;
+  color: #ffa500;
+}
+
+/* Admin dashboard specific */
+.security-icon .lucid-Icon {
+  color: #ffa500;
+}
+
+.link-icon .lucid-Icon {
+  color: #4facfe;
+}
+
+.feature-icon .lucid-Icon {
+  color: #00f2fe;
+}
+
+.footer-icon .lucid-Icon {
+  color: #ffffff;
+}
+
+/* Risk level colors */
+.stat-icon .lucid-Icon {
+  width: 28px;
+  height: 28px;
+}
+
+.high-risk .stat-icon .lucid-Icon {
+  color: #ff4444;
+}
+
+.medium-risk .stat-icon .lucid-Icon {
+  color: #ffa500;
+}
+
+.low-risk .stat-icon .lucid-Icon {
+  color: #00ff88;
+}
+
+.blocked .stat-icon .lucid-Icon {
+  color: #ff6b6b;
+}
+
+.risk-icon .lucid-Icon {
+  width: 24px;
+  height: 24px;
+}
+
+.method-icon .lucid-Icon {
+  width: 24px;
+  height: 24px;
+  color: #4facfe;
+}
+
+/* Hover effects */
+.lucid-Icon:hover {
+  opacity: 0.8;
+  transition: opacity 0.2s ease;
+}
+
+/* Button icon styling */
+button .lucid-Icon {
+  margin-right: 4px;
+}
+
+/* Ensure proper vertical alignment */
+.lucid-Icon {
+  vertical-align: middle;
+  display: inline-block;
+}

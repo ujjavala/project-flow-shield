@@ -1,11 +1,12 @@
 import React from 'react';
+import { FiMonitor, FiTool, FiActivity } from 'react-icons/fi';
 
 const ServicesTab = ({ serviceStatus, temporalStatus }) => (
   <div className="services-tab">
     <div className="services-grid">
       <div className="service-card">
         <div className="service-header">
-          <span className="service-icon">🖥️</span>
+          <span className="service-icon"><FiMonitor /></span>
           <h3>Simple Server</h3>
           <span className={`status-badge ${serviceStatus?.simple_server?.status || 'unknown'}`}>
             {serviceStatus?.simple_server?.status || 'Unknown'}
@@ -19,7 +20,7 @@ const ServicesTab = ({ serviceStatus, temporalStatus }) => (
 
       <div className="service-card">
         <div className="service-header">
-          <span className="service-icon">🔧</span>
+          <span className="service-icon"><FiTool /></span>
           <h3>Main Backend</h3>
           <span className={`status-badge ${serviceStatus?.main_backend?.status || 'unknown'}`}>
             {serviceStatus?.main_backend?.status || 'Unknown'}
@@ -33,7 +34,7 @@ const ServicesTab = ({ serviceStatus, temporalStatus }) => (
 
       <div className="service-card">
         <div className="service-header">
-          <span className="service-icon">🌊</span>
+          <span className="service-icon"><FiActivity /></span>
           <h3>Temporal</h3>
           <span className={`status-badge ${temporalStatus?.temporal_connected ? 'healthy' : 'critical'}`}>
             {temporalStatus?.temporal_connected ? 'Connected' : 'Disconnected'}

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { FiUsers, FiBarChart2, FiTarget, FiActivity, FiCpu, FiSmartphone, FiAlertTriangle, FiAlertCircle, FiGlobe, FiClock, FiCheckCircle } from 'react-icons/fi';
 
 const BehavioralAnalyticsTab = ({ behaviorAnalytics, realtimeEvents }) => {
   const [selectedTimeRange, setSelectedTimeRange] = useState('24h');
@@ -106,7 +107,7 @@ const BehavioralAnalyticsTab = ({ behaviorAnalytics, realtimeEvents }) => {
       {/* Overview Stats */}
       <div className="behavioral-stats-grid">
         <div className="stat-card total-users">
-          <div className="stat-icon">👥</div>
+          <div className="stat-icon"><FiUsers /></div>
           <div className="stat-content">
             <div className="stat-value">{behaviorAnalytics?.overview?.total_users_monitored || 0}</div>
             <div className="stat-label">Users Monitored</div>
@@ -114,7 +115,7 @@ const BehavioralAnalyticsTab = ({ behaviorAnalytics, realtimeEvents }) => {
         </div>
 
         <div className="stat-card total-events">
-          <div className="stat-icon">📊</div>
+          <div className="stat-icon"><FiBarChart2 /></div>
           <div className="stat-content">
             <div className="stat-value">{behaviorAnalytics?.overview?.total_events || 0}</div>
             <div className="stat-label">Behavioral Events</div>
@@ -122,7 +123,7 @@ const BehavioralAnalyticsTab = ({ behaviorAnalytics, realtimeEvents }) => {
         </div>
 
         <div className="stat-card avg-risk">
-          <div className="stat-icon">⚡</div>
+          <div className="stat-icon"><FiTarget /></div>
           <div className="stat-content">
             <div className="stat-value">
               {(behaviorAnalytics?.overview?.average_risk_score || 0).toFixed(2)}
@@ -132,7 +133,7 @@ const BehavioralAnalyticsTab = ({ behaviorAnalytics, realtimeEvents }) => {
         </div>
 
         <div className="stat-card active-alerts">
-          <div className="stat-icon">🚨</div>
+          <div className="stat-icon"><FiAlertTriangle /></div>
           <div className="stat-content">
             <div className="stat-value">{fraudAlerts.filter(a => a.status === 'active').length}</div>
             <div className="stat-label">Active Alerts</div>
@@ -144,7 +145,7 @@ const BehavioralAnalyticsTab = ({ behaviorAnalytics, realtimeEvents }) => {
       <div className="analytics-main-grid">
         {/* High Risk Users */}
         <div className="analytics-section high-risk-users">
-          <h3>🔴 High Risk Users</h3>
+          <h3><FiAlertCircle className="text-red-500" /> High Risk Users</h3>
           <div className="risk-users-list">
             {highRiskUsers.length > 0 ? (
               highRiskUsers.map((user, i) => (
@@ -174,7 +175,7 @@ const BehavioralAnalyticsTab = ({ behaviorAnalytics, realtimeEvents }) => {
 
         {/* Real-time Behavioral Events */}
         <div className="analytics-section behavioral-events">
-          <h3>🔄 Real-time Behavioral Events</h3>
+          <h3><FiActivity /> Real-time Behavioral Events</h3>
           <div className="events-feed">
             {realtimeEvents.slice(0, 8).map((event, i) => (
               <div key={i} className={`event-item ${event.severity || 'info'}`}>
@@ -200,17 +201,17 @@ const BehavioralAnalyticsTab = ({ behaviorAnalytics, realtimeEvents }) => {
 
       {/* Fraud Alerts Section */}
       <div className="analytics-section fraud-alerts">
-        <h3>🚨 Fraud Alerts Management</h3>
+        <h3><FiAlertTriangle /> Fraud Alerts Management</h3>
         <div className="alerts-grid">
           {fraudAlerts.length > 0 ? (
             fraudAlerts.map((alert) => (
               <div key={alert.id} className={`alert-card ${alert.severity} ${alert.status}`}>
                 <div className="alert-header">
                   <div className="alert-severity">
-                    {alert.severity === 'critical' && '🔴'}
-                    {alert.severity === 'high' && '🟠'}
-                    {alert.severity === 'medium' && '🟡'}
-                    {alert.severity === 'low' && '🟢'}
+                    {alert.severity === 'critical' && <FiAlertCircle className="text-red-500" />}
+                    {alert.severity === 'high' && <FiAlertCircle className="text-orange-500" />}
+                    {alert.severity === 'medium' && <FiAlertCircle className="text-yellow-500" />}
+                    {alert.severity === 'low' && <FiCheckCircle className="text-green-500" />}
                     {alert.severity.toUpperCase()}
                   </div>
                   <div className="alert-status">{alert.status.toUpperCase()}</div>
@@ -249,10 +250,10 @@ const BehavioralAnalyticsTab = ({ behaviorAnalytics, realtimeEvents }) => {
 
       {/* Analytics Insights */}
       <div className="analytics-insights">
-        <h3>📈 Behavioral Insights</h3>
+        <h3><FiCpu /> Behavioral Insights</h3>
         <div className="insights-grid">
           <div className="insight-card">
-            <h4>🌍 Location Analytics</h4>
+            <h4><FiGlobe /> Location Analytics</h4>
             <p>Monitoring geographic patterns and detecting impossible travel scenarios</p>
             <div className="insight-stat">
               Location anomalies detected: {behaviorAnalytics?.location_anomalies || 0}
@@ -260,7 +261,7 @@ const BehavioralAnalyticsTab = ({ behaviorAnalytics, realtimeEvents }) => {
           </div>
 
           <div className="insight-card">
-            <h4>📱 Device Analytics</h4>
+            <h4><FiSmartphone /> Device Analytics</h4>
             <p>Tracking device fingerprints and identifying new or suspicious devices</p>
             <div className="insight-stat">
               New devices this week: {behaviorAnalytics?.new_devices || 0}
@@ -268,7 +269,7 @@ const BehavioralAnalyticsTab = ({ behaviorAnalytics, realtimeEvents }) => {
           </div>
 
           <div className="insight-card">
-            <h4>🕒 Temporal Analytics</h4>
+            <h4><FiClock /> Temporal Analytics</h4>
             <p>Analyzing login time patterns and detecting unusual activity times</p>
             <div className="insight-stat">
               Off-hours logins: {behaviorAnalytics?.off_hours_logins || 0}
@@ -276,7 +277,7 @@ const BehavioralAnalyticsTab = ({ behaviorAnalytics, realtimeEvents }) => {
           </div>
 
           <div className="insight-card">
-            <h4>🤖 AI Analysis</h4>
+            <h4><FiCpu /> AI Analysis</h4>
             <p>Machine learning-powered risk assessment and pattern recognition</p>
             <div className="insight-stat">
               AI model accuracy: {behaviorAnalytics?.ai_accuracy || 'N/A'}

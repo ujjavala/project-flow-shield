@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import toast from 'react-hot-toast';
+import { FiEye, FiEyeOff, FiChevronDown, FiShield, FiLock, FiSettings, FiUsers, FiBarChart2, FiMonitor, FiAlertTriangle, FiDatabase, FiZap } from 'react-icons/fi';
 import FlowShieldLogo from './common/FlowShieldLogo';
 import './AdminLogin.css';
 
@@ -72,7 +73,7 @@ const AdminLogin = () => {
           <h1>Admin Portal</h1>
           <p>Secure Administrative Access</p>
           <div className="admin-badge">
-            <span className="badge-icon">🛡️</span>
+            <span className="badge-icon"><FiShield /></span>
             <span>Administrative Login</span>
           </div>
         </div>
@@ -110,7 +111,7 @@ const AdminLogin = () => {
                 className="password-toggle"
                 onClick={() => setShowPassword(!showPassword)}
               >
-                {showPassword ? '👁️' : '👁️‍🗨️'}
+                {showPassword ? <FiEyeOff /> : <FiEye />}
               </button>
             </div>
           </div>
@@ -137,7 +138,7 @@ const AdminLogin = () => {
               <span>Logging you in...</span>
             ) : (
               <>
-                <span className="btn-icon">🔐</span>
+                <span className="btn-icon"><FiLock /></span>
                 <span>Admin Login</span>
               </>
             )}
@@ -145,7 +146,7 @@ const AdminLogin = () => {
 
           <div className="admin-login-security">
             <div className="security-notice">
-              <span className="security-icon">⚠️</span>
+              <span className="security-icon"><FiShield /></span>
               <div className="security-text">
                 <strong>Security Notice:</strong>
                 <p>This is a restricted admin portal. All access is logged and monitored.</p>
@@ -155,57 +156,20 @@ const AdminLogin = () => {
 
           <div className="admin-login-links">
             <Link to="/login" className="regular-login-link">
-              <span className="link-icon">👤</span>
+              <span className="link-icon"><FiSettings /></span>
               Regular User Login
             </Link>
-
             <Link to="/admin/forgot-password" className="forgot-password-link">
-              <span className="link-icon">🔄</span>
+              <span className="link-icon"><FiSettings /></span>
               Admin Password Reset
             </Link>
           </div>
 
-          <div className="admin-features">
-            <h4 onClick={() => setFeaturesExpanded(!featuresExpanded)}>
-              <span>{featuresExpanded ? '🔽' : '▶️'}</span>
-              Admin Portal Features
-            </h4>
-            <div className={`features-grid ${!featuresExpanded ? 'collapsed' : ''}`}>
-              <div className="feature-item" onClick={() => alert('System Monitoring: Real-time dashboard with metrics, health checks, and performance analytics.')}>
-                <span className="feature-icon">📊</span>
-                <span>System Monitoring</span>
-              </div>
-              <div className="feature-item" onClick={() => alert('User Management: Create, edit, disable users, manage roles and permissions.')}>
-                <span className="feature-icon">👥</span>
-                <span>User Management</span>
-              </div>
-              <div className="feature-item" onClick={() => alert('Security Analytics: Advanced fraud detection, risk scoring, and security event analysis.')}>
-                <span className="feature-icon">🚨</span>
-                <span>Security Analytics</span>
-              </div>
-              <div className="feature-item" onClick={() => alert('Rate Limiting: Configure and monitor API rate limits, DDoS protection.')}>
-                <span className="feature-icon">⚡</span>
-                <span>Rate Limiting</span>
-              </div>
-              <div className="feature-item" onClick={() => alert('AI Fraud Detection: Machine learning powered fraud prevention and risk analysis.')}>
-                <span className="feature-icon">🤖</span>
-                <span>AI Fraud Detection</span>
-              </div>
-              <div className="feature-item" onClick={() => alert('Temporal Workflows: Orchestrate complex business processes with reliability and scalability.')}>
-                <span className="feature-icon">🔄</span>
-                <span>Temporal Workflows</span>
-              </div>
-            </div>
-          </div>
         </form>
-
         <div className="admin-login-footer">
           <p>
-            <span className="footer-icon">🔒</span>
+            <span className="footer-icon"><FiZap /></span>
             Powered by FlowShield Security Platform
-          </p>
-          <p className="build-info">
-            Admin Portal v1.0 • Temporal.io Powered
           </p>
         </div>
       </div>

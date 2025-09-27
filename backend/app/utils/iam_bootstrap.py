@@ -636,14 +636,37 @@ class IAMBootstrap:
 
         for user_data in test_users:
             # Check if user already exists
-            existing = await db.execute(
+            existing_result = await db.execute(
                 select(User).where(User.email == user_data['email'])
             )
-            if existing.scalar_one_or_none():
-                continue
+            existing_user = existing_result.scalar_one_or_none()
 
             # Extract IAM role for later assignment
             iam_role = user_data.pop('iam_role')
+
+            if existing_user:
+                # Update existing user with admin privileges if needed
+                if user_data.get('is_superuser') or user_data.get('role') in ['admin', 'moderator']:
+                    existing_user.role = user_data.get('role', existing_user.role)
+                    existing_user.is_superuser = user_data.get('is_superuser', existing_user.is_superuser)
+                    existing_user.is_verified = user_data.get('is_verified', existing_user.is_verified)
+                    existing_user.is_active = user_data.get('is_active', existing_user.is_active)
+                    # Update names if provided
+                    if user_data.get('first_name'):
+                        existing_user.first_name = user_data.get('first_name')
+                    if user_data.get('last_name'):
+                        existing_user.last_name = user_data.get('last_name')
+                    await db.flush()
+                    logger.info(f"Updated existing user {existing_user.email} with admin privileges (role: {existing_user.role}, superuser: {existing_user.is_superuser})")
+
+                # Store for role assignment
+                existing_user.iam_role_to_assign = iam_role
+                self.created_items['users'].append({
+                    'email': existing_user.email,
+                    'username': existing_user.username,
+                    'iam_role': iam_role
+                })
+                continue
 
             # Hash password
             user_data['hashed_password'] = hash_password(user_data.pop('password'))

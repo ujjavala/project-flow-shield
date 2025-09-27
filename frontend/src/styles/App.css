@@ -196,7 +196,7 @@ body {
   font-size: 18px;
   cursor: pointer;
   padding: 5px;
-  color: #666;
+  color: #333;
   transition: color 0.2s ease;
   display: flex;
   align-items: center;

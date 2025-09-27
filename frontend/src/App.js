@@ -1,5 +1,5 @@
 import React from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import { AuthProvider, useAuth } from './context/AuthContext';
 
@@ -35,7 +35,7 @@ function AppContent() {
   if (!backendOnline) {
     return (
       <div className="backend-offline">
-        <h2>🚧 Backend is currently offline</h2>
+        <h2>Backend is currently offline</h2>
         <p>Some features may not work. Please try again later.</p>
       </div>
     );
@@ -129,7 +129,7 @@ function AppContent() {
 
 function App() {
   return (
-    <Router>
+    <Router future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
       <AuthProvider>
         <AppContent />
       </AuthProvider>

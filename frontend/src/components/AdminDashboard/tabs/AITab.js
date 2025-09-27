@@ -1,4 +1,5 @@
 import React from 'react';
+import { FiCpu, FiZap, FiBarChart2 } from 'react-icons/fi';
 
 const AITab = ({ aiStatus, fraudAnalytics, onRefresh }) => (
   <div className="ai-tab">
@@ -8,7 +9,7 @@ const AITab = ({ aiStatus, fraudAnalytics, onRefresh }) => (
     <div className="ai-metrics-grid">
       <div className="ai-card">
         <div className="ai-header">
-          <span className="ai-icon">🤖</span>
+          <span className="ai-icon"><FiCpu /></span>
           <h3>Ollama Status</h3>
           <span className={`status-badge ${aiStatus?.ollama_available ? 'healthy' : 'critical'}`}>
             {aiStatus?.ollama_available ? 'Online' : 'Offline'}
@@ -22,7 +23,7 @@ const AITab = ({ aiStatus, fraudAnalytics, onRefresh }) => (
 
       <div className="ai-card">
         <div className="ai-header">
-          <span className="ai-icon">⚡</span>
+          <span className="ai-icon"><FiZap /></span>
           <h3>Performance</h3>
           <span className="status-badge healthy">Active</span>
         </div>
@@ -34,7 +35,7 @@ const AITab = ({ aiStatus, fraudAnalytics, onRefresh }) => (
 
       <div className="ai-card">
         <div className="ai-header">
-          <span className="ai-icon">📊</span>
+          <span className="ai-icon"><FiBarChart2 /></span>
           <h3>Usage Stats</h3>
           <span className="status-badge healthy">Monitoring</span>
         </div>

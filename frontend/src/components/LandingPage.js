@@ -1,5 +1,6 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
+import { FiShield, FiLock, FiZap, FiBarChart2, FiKey, FiSettings } from 'react-icons/fi';
 import FlowShieldLogo from './common/FlowShieldLogo';
 import './LandingPage.css';
 import './common/FlowShieldLogo.css';
@@ -9,27 +10,27 @@ const LandingPage = () => {
 
   const features = [
     {
-      icon: '🛡',
+      icon: <FiShield />,
       title: 'AI-Powered Security',
       description: 'Advanced machine learning algorithms detect and prevent fraud in real-time'
     },
     {
-      icon: '🔐',
+      icon: <FiLock />,
       title: 'Multi-Factor Authentication',
       description: 'Enterprise-grade MFA with SMS, email, and app-based verification'
     },
     {
-      icon: '⚡',
+      icon: <FiZap />,
       title: 'Temporal Workflows',
       description: 'Reliable, fault-tolerant authentication flows powered by Temporal.io'
     },
     {
-      icon: '📊',
+      icon: <FiBarChart2 />,
       title: 'Behavioral Analytics',
       description: 'Monitor user patterns and detect anomalies with intelligent analysis'
     },
     {
-      icon: '🔒',
+      icon: <FiLock />,
       title: 'Zero Trust Security',
       description: 'Every request is verified with comprehensive security policies'
     }
@@ -66,11 +67,11 @@ const LandingPage = () => {
 
           <div className="cta-buttons">
             <button className="cta-button primary" onClick={handleUserLogin}>
-              <span className="btn-icon">🔑</span>
+              <span className="btn-icon"><FiKey /></span>
               Login as User
             </button>
             <button className="cta-button secondary" onClick={handleAdminLogin}>
-              <span className="btn-icon">⚙</span>
+              <span className="btn-icon"><FiSettings /></span>
               Admin Dashboard
             </button>
           </div>

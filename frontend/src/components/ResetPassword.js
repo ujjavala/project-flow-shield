@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Link, useSearchParams, useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
+import { FiEye, FiEyeOff } from 'react-icons/fi';
 import { useAuth } from '../context/AuthContext';
 
 const ResetPassword = () => {
@@ -134,7 +135,7 @@ const ResetPassword = () => {
                   className="password-toggle"
                   onClick={() => setShowPassword(!showPassword)}
                 >
-                  {showPassword ? '👁️' : '👁️‍🗨️'}
+                  {showPassword ? <FiEyeOff /> : <FiEye />}
                 </button>
               </div>
               {errors.password && (
@@ -160,7 +161,7 @@ const ResetPassword = () => {
                   className="password-toggle"
                   onClick={() => setShowConfirmPassword(!showConfirmPassword)}
                 >
-                  {showConfirmPassword ? '👁️' : '👁️‍🗨️'}
+                  {showConfirmPassword ? <FiEyeOff /> : <FiEye />}
                 </button>
               </div>
               {errors.confirmPassword && (

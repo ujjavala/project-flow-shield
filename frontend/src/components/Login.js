@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
+import { FiEye, FiEyeOff, FiSettings } from 'react-icons/fi';
 import { useAuth } from '../context/AuthContext';
 const Login = () => {
   const [loading, setLoading] = useState(false);
@@ -76,7 +77,9 @@ const Login = () => {
                 className="password-toggle"
                 onClick={() => setShowPassword(!showPassword)}
               >
-                {showPassword ? '👁️' : '👁️‍🗨️'}
+                <span className="icon-white">
+                  {showPassword ? <FiEyeOff /> : <FiEye />}
+                </span>
               </button>
             </div>
             {errors.password && (
@@ -109,7 +112,7 @@ const Login = () => {
           <p>
             Administrator?{' '}
             <Link to="/admin/login" className="auth-link admin-link">
-              🛡️ Admin Portal
+              <FiSettings className="icon-primary" /> Admin Portal
             </Link>
           </p>
         </div>

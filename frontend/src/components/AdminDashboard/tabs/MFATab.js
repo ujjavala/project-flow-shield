@@ -1,4 +1,5 @@
 import React from 'react';
+import { FiLock, FiMail, FiSmartphone, FiBell, FiSettings, FiShield, FiTarget, FiClock, FiAward, FiAlertTriangle, FiAlertCircle, FiCheckCircle } from 'react-icons/fi';
 
 const MFATab = ({ mfaAnalytics, securityOverview }) => (
   <div className="mfa-tab">
@@ -6,7 +7,7 @@ const MFATab = ({ mfaAnalytics, securityOverview }) => (
     <div className="mfa-overview-grid">
       <div className="mfa-card">
         <div className="mfa-header">
-          <span className="mfa-icon">🛡️</span>
+          <span className="mfa-icon"><FiLock /></span>
           <h3>MFA Statistics (24h)</h3>
           <span className={`status-badge ${mfaAnalytics?.system_status?.mfa_service === 'operational' ? 'healthy' : 'warning'}`}>
             {mfaAnalytics?.system_status?.mfa_service === 'operational' ? 'Operational' : 'Issues'}
@@ -34,7 +35,7 @@ const MFATab = ({ mfaAnalytics, securityOverview }) => (
 
       <div className="mfa-card">
         <div className="mfa-header">
-          <span className="mfa-icon">⚡</span>
+          <span className="mfa-icon"><FiLock /></span>
           <h3>Performance Metrics</h3>
           <span className="status-badge healthy">Monitoring</span>
         </div>
@@ -57,16 +58,16 @@ const MFATab = ({ mfaAnalytics, securityOverview }) => (
 
     {/* MFA Methods Distribution */}
     <div className="mfa-methods-section">
-      <h3>🔐 MFA Methods Usage</h3>
+      <h3><FiLock /> MFA Methods Usage</h3>
       <div className="mfa-methods-grid">
         {mfaAnalytics?.mfa_methods && Object.entries(mfaAnalytics.mfa_methods).map(([method, data]) => (
           <div key={method} className="method-card">
             <div className="method-header">
               <span className="method-icon">
-                {method === 'email' ? '📧' : 
-                 method === 'totp' ? '📱' : 
-                 method === 'sms' ? '💬' : 
-                 method === 'push' ? '🔔' : '🔑'}
+                {method === 'email' ? <FiMail /> :
+                 method === 'totp' ? <FiLock /> :
+                 method === 'sms' ? <FiSmartphone /> :
+                 method === 'push' ? <FiBell /> : <FiSettings />}
               </span>
               <div className="method-name">{method.toUpperCase()}</div>
             </div>
@@ -83,11 +84,11 @@ const MFATab = ({ mfaAnalytics, securityOverview }) => (
 
     {/* Risk Distribution */}
     <div className="risk-distribution-section">
-      <h3>⚠️ Risk Assessment Distribution</h3>
+      <h3><FiTarget /> Risk Assessment Distribution</h3>
       <div className="risk-cards">
         <div className="risk-card low-risk">
           <div className="risk-header">
-            <span className="risk-icon">🟢</span>
+            <span className="risk-icon"><FiShield /></span>
             <div className="mfa-risk-label">Low Risk</div>
           </div>
           <div className="risk-stats">
@@ -98,7 +99,7 @@ const MFATab = ({ mfaAnalytics, securityOverview }) => (
 
         <div className="risk-card medium-risk">
           <div className="risk-header">
-            <span className="risk-icon">🟡</span>
+            <span className="risk-icon"><FiShield /></span>
             <div className="mfa-risk-label">Medium Risk</div>
           </div>
           <div className="risk-stats">
@@ -109,7 +110,7 @@ const MFATab = ({ mfaAnalytics, securityOverview }) => (
 
         <div className="risk-card high-risk">
           <div className="risk-header">
-            <span className="risk-icon">🔴</span>
+            <span className="risk-icon"><FiShield /></span>
             <div className="mfa-risk-label">High Risk</div>
           </div>
           <div className="risk-stats">
@@ -122,7 +123,7 @@ const MFATab = ({ mfaAnalytics, securityOverview }) => (
 
     {/* Security Events */}
     <div className="security-events-section">
-      <h3>🚨 Security Events</h3>
+      <h3><FiShield /> Security Events</h3>
       <div className="security-events-grid">
         <div className="security-event-card">
           <div className="event-label">Rate Limit Violations</div>
@@ -146,7 +147,7 @@ const MFATab = ({ mfaAnalytics, securityOverview }) => (
     {/* Recent Security Events from Security Overview */}
     {securityOverview?.recent_events && (
       <div className="recent-events-section">
-        <h3>📋 Recent Security Events</h3>
+        <h3><FiClock /> Recent Security Events</h3>
         <div className="events-list">
           {securityOverview.recent_events.slice(0, 10).map((event, index) => (
             <div key={index} className={`event-item ${event.severity}`}>
@@ -164,7 +165,7 @@ const MFATab = ({ mfaAnalytics, securityOverview }) => (
     {securityOverview?.overall_security_score && (
       <div className="security-score-section">
         <div className="security-score-card">
-          <h3>🏆 Overall Security Score</h3>
+          <h3><FiAward /> Overall Security Score</h3>
           <div className={`security-score ${securityOverview.overall_security_score >= 90 ? 'excellent' : 
                                             securityOverview.overall_security_score >= 80 ? 'good' : 
                                             securityOverview.overall_security_score >= 70 ? 'warning' : 'critical'}`}>

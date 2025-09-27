@@ -6,6 +6,16 @@ import MetricCard from './Dashboard/components/MetricCard';
 import HealthCard from './Dashboard/components/HealthCard';
 import FlowShieldLogo from './common/FlowShieldLogo';
 import './common/FlowShieldLogo.css';
+import {
+  FiSettings,
+  FiLock,
+  FiUnlock,
+  FiAlertTriangle,
+  FiCheckCircle,
+  FiMail,
+  FiGlobe,
+  FiFileText
+} from 'react-icons/fi';
 
 const Dashboard = () => {
   const { user, logout } = useAuth();
@@ -211,7 +221,7 @@ const Dashboard = () => {
                 <span>Logging you out...</span>
               ) : (
                 <>
-                  <span className="btn-icon">⚡</span>
+                  <span className="icon-white"><FiSettings /></span>
                   <span>Log Out</span>
                 </>
               )}
@@ -223,26 +233,26 @@ const Dashboard = () => {
       {/* User Security Dashboard */}
       <div className="metrics-grid">
         <MetricCard
-          icon="🛡"
+          icon={<FiSettings />}
           title="Security Score"
           value="98.5"
           change={{ text: "Excellent protection level", type: "positive" }}
           highlight={true}
         />
         <MetricCard
-          icon="🔑"
+          icon={<FiUnlock />}
           title="Login Sessions"
           value={systemStats.totalRequests.toLocaleString()}
           change={{ text: `${Math.floor(Math.random() * 5 + 1)} successful today`, type: "positive" }}
         />
         <MetricCard
-          icon="🔒"
+          icon={<FiLock />}
           title="MFA Status"
           value="Active"
           change={{ text: "Two-factor enabled", type: "positive" }}
         />
         <MetricCard
-          icon="⚠"
+          icon={<FiAlertTriangle />}
           title="Threat Detection"
           value="0 Alerts"
           change={{ text: "No threats detected", type: "positive" }}
@@ -261,7 +271,7 @@ const Dashboard = () => {
 
         <div className="health-grid">
           <HealthCard
-            icon="🔐"
+            icon={<FiLock />}
             title="Password Strength"
             value={85}
             status="healthy"
@@ -271,7 +281,7 @@ const Dashboard = () => {
             getHealthStatus={getHealthStatus}
           />
           <HealthCard
-            icon="📱"
+            icon={<FiMail />}
             title="Device Trust Score"
             value={92}
             status="healthy"
@@ -281,7 +291,7 @@ const Dashboard = () => {
             getHealthStatus={getHealthStatus}
           />
           <HealthCard
-            icon="🌍"
+            icon={<FiGlobe />}
             title="Location Security"
             value={98}
             status="healthy"
@@ -309,21 +319,21 @@ const Dashboard = () => {
           </div>
           <div className="activity-timeline">
             <div className="activity-item">
-              <div className="activity-icon">🔑</div>
+              <div className="activity-icon"><FiUnlock /></div>
               <div className="activity-content">
                 <div className="activity-title">Successful Login</div>
                 <div className="activity-details">Chrome on MacOS • 2 hours ago</div>
               </div>
             </div>
             <div className="activity-item">
-              <div className="activity-icon">📱</div>
+              <div className="activity-icon"><FiMail /></div>
               <div className="activity-content">
                 <div className="activity-title">MFA Verification</div>
                 <div className="activity-details">SMS code verified • 2 hours ago</div>
               </div>
             </div>
             <div className="activity-item">
-              <div className="activity-icon">✅</div>
+              <div className="activity-icon"><FiCheckCircle /></div>
               <div className="activity-content">
                 <div className="activity-title">Security Scan Complete</div>
                 <div className="activity-details">No threats detected • 1 day ago</div>
@@ -342,7 +352,7 @@ const Dashboard = () => {
 
         <div className="actions-grid">
           <div className="action-card">
-            <div className="action-icon">🔐</div>
+            <div className="action-icon"><FiLock /></div>
             <div className="action-content">
               <h4>Change Password</h4>
               <p>Update your account password for enhanced security</p>
@@ -351,7 +361,7 @@ const Dashboard = () => {
           </div>
 
           <div className="action-card">
-            <div className="action-icon">📱</div>
+            <div className="action-icon"><FiMail /></div>
             <div className="action-content">
               <h4>MFA Settings</h4>
               <p>Configure two-factor authentication methods</p>
@@ -360,7 +370,7 @@ const Dashboard = () => {
           </div>
 
           <div className="action-card">
-            <div className="action-icon">📊</div>
+            <div className="action-icon"><FiFileText /></div>
             <div className="action-content">
               <h4>Security Reports</h4>
               <p>View detailed security reports and login history</p>

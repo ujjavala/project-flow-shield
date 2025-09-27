@@ -34,30 +34,24 @@ open http://localhost:8081        # Temporal UI (workflows)
 ## 🔑 Test User Credentials
 
 > **📋 Dashboard Access Summary:**
-> - **Admin Dashboard** (http://localhost:3000/admin/login): Super Admin, Admin, Manager
-> - **User Dashboard** (http://localhost:3000): All users (Regular User, Analyst, Moderator, Guest)
+> - **Admin Dashboard** (http://localhost:3000/admin/login): Super Admin, Manager, Moderator
+> - **User Dashboard** (http://localhost:3000): All users including admins
 
 ### 🔴 Super Administrator
 - **Email:** `super.admin@temporal-auth.com`
 - **Username:** `superadmin`
 - **Password:** `SuperAdmin123!`
-- **Role:** Super Administrator (All permissions, Global scope)
+- **System Role:** `admin` + `is_superuser: true`
+- **IAM Role:** Super Administrator (All permissions, Global scope)
 - **Dashboard Access:** ✅ **Admin Dashboard** + User Dashboard
 - **Features:** Full system control, all dashboards, all IAM operations
-
-### 🟠 System Administrator
-- **Email:** `admin@temporal-auth.com`
-- **Username:** `admin`
-- **Password:** `Admin123!`
-- **Role:** Administrator (Most admin permissions, Global scope)
-- **Dashboard Access:** ✅ **Admin Dashboard** + User Dashboard
-- **Features:** User management, role assignment, system monitoring
 
 ### 🟡 Team Manager
 - **Email:** `manager@temporal-auth.com`
 - **Username:** `manager`
 - **Password:** `Manager123!`
-- **Role:** Manager (Team oversight, Engineering department scope)
+- **System Role:** `moderator`
+- **IAM Role:** Manager (Team oversight, Engineering department scope)
 - **Dashboard Access:** ✅ **Admin Dashboard** + User Dashboard
 - **Features:** Team analytics, user viewing, admin operations
 
@@ -65,15 +59,17 @@ open http://localhost:8081        # Temporal UI (workflows)
 - **Email:** `moderator@temporal-auth.com`
 - **Username:** `moderator`
 - **Password:** `Moderator123!`
-- **Role:** Moderator (Content moderation, Engineering department scope)
-- **Dashboard Access:** 👤 **User Dashboard** only
+- **System Role:** `moderator`
+- **IAM Role:** Moderator (Content moderation, Engineering department scope)
+- **Dashboard Access:** ✅ **Admin Dashboard** + User Dashboard
 - **Features:** Content moderation, user profile management
 
 ### 🔵 Data Analyst
 - **Email:** `analyst@temporal-auth.com`
 - **Username:** `analyst`
 - **Password:** `Analyst123!`
-- **Role:** Data Analyst (Analytics access, Marketing department scope)
+- **System Role:** `user`
+- **IAM Role:** Data Analyst (Analytics access, Marketing department scope)
 - **Dashboard Access:** 👤 **User Dashboard** only
 - **Features:** Analytics dashboard, reporting features
 
@@ -81,7 +77,8 @@ open http://localhost:8081        # Temporal UI (workflows)
 - **Email:** `user@temporal-auth.com`
 - **Username:** `regularuser`
 - **Password:** `User123!`
-- **Role:** Standard User (Own profile management, Frontend team scope)
+- **System Role:** `user`
+- **IAM Role:** Standard User (Own profile management, Frontend team scope)
 - **Dashboard Access:** 👤 **User Dashboard** only
 - **Features:** User profile settings, basic functionality
 
@@ -89,9 +86,12 @@ open http://localhost:8081        # Temporal UI (workflows)
 - **Email:** `guest@temporal-auth.com`
 - **Username:** `guestuser`
 - **Password:** `Guest123!`
-- **Role:** Guest (Limited read-only, No specific scope)
+- **System Role:** `user` + `is_verified: false`
+- **IAM Role:** Guest (Limited read-only, No specific scope)
 - **Dashboard Access:** 👤 **User Dashboard** only
 - **Features:** Basic read-only user dashboard (limited features)
+
+> **📝 Note:** All users above are automatically created by the `./scripts/setup-users.sh` script and configured with proper roles via the IAM bootstrap system.
 
 ## 📋 Services Overview
 

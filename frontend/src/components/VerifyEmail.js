@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useSearchParams, useNavigate } from 'react-router-dom';
+import { FiCheckCircle, FiXCircle, FiAlertTriangle } from 'react-icons/fi';
 import { useAuth } from '../context/AuthContext';
 
 const VerifyEmail = () => {
@@ -53,7 +54,7 @@ const VerifyEmail = () => {
       <div className="auth-card">
         {verificationStatus === 'success' && (
           <div className="auth-header">
-            <div className="success-icon">✅</div>
+            <div className="success-icon icon-success icon-xlarge"><FiCheckCircle /></div>
             <h2>Email Verified Successfully!</h2>
             <p>Your email address has been verified. You can now sign in to your account.</p>
             <p className="redirect-message">Redirecting to login page in 3 seconds...</p>
@@ -62,7 +63,7 @@ const VerifyEmail = () => {
 
         {verificationStatus === 'error' && (
           <div className="auth-header">
-            <div className="error-icon">❌</div>
+            <div className="error-icon icon-danger icon-xlarge"><FiXCircle /></div>
             <h2>Email Verification Failed</h2>
             <p>The verification link is invalid or has expired. Please request a new verification email.</p>
           </div>
@@ -70,7 +71,7 @@ const VerifyEmail = () => {
 
         {verificationStatus === 'no-token' && (
           <div className="auth-header">
-            <div className="warning-icon">⚠️</div>
+            <div className="warning-icon icon-warning icon-xlarge"><FiAlertTriangle /></div>
             <h2>Invalid Verification Link</h2>
             <p>The verification link appears to be invalid. Please check your email and try again.</p>
           </div>

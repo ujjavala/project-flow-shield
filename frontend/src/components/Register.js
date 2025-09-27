@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { useAuth } from '../context/AuthContext';
+import { FiEye, FiEyeOff } from 'react-icons/fi';
 const Register = () => {
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
@@ -155,7 +156,9 @@ const Register = () => {
                 className="password-toggle"
                 onClick={() => setShowPassword(!showPassword)}
               >
-                {showPassword ? '👁️' : '👁️‍🗨️'}
+                <span className="icon-white">
+                  {showPassword ? <FiEyeOff /> : <FiEye />}
+                </span>
               </button>
             </div>
             {errors.password && (
@@ -181,7 +184,9 @@ const Register = () => {
                 className="password-toggle"
                 onClick={() => setShowConfirmPassword(!showConfirmPassword)}
               >
-                {showConfirmPassword ? '👁️' : '👁️‍🗨️'}
+                <span className="icon-white">
+                  {showConfirmPassword ? <FiEyeOff /> : <FiEye />}
+                </span>
               </button>
             </div>
             {errors.confirmPassword && (

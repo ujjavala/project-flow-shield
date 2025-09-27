@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { FiMonitor, FiShield, FiUsers, FiCpu, FiSearch, FiBarChart2, FiTarget } from 'react-icons/fi';
 import RiskDistributionChart from '../charts/RiskDistributionChart';
 import RiskFactorsChart from '../charts/RiskFactorsChart';
 
@@ -17,7 +18,7 @@ const OverviewTab = ({ systemHealth, fraudAnalytics }) => {
     <div className="metrics-grid">
       <div className="metric-card highlight expandable" onClick={() => toggleCard('system-status')}>
         <div className="metric-header">
-          <span className="metric-icon">🛡️</span>
+          <span className="metric-icon"><FiMonitor /></span>
           <h3>System Status</h3>
         </div>
         <div className="metric-value">{systemHealth?.status || 'Unknown'}</div>
@@ -25,7 +26,7 @@ const OverviewTab = ({ systemHealth, fraudAnalytics }) => {
           {systemHealth?.metrics?.services_healthy || 0}/{systemHealth?.metrics?.services_total || 0} services healthy
         </div>
         <div className="expand-toggle">
-          <span className={`expand-icon ${expandedCards['system-status'] ? 'expanded' : ''}`}>▶</span>
+          <span className={`expand-icon ${expandedCards['system-status'] ? 'expanded' : ''}`}><FiSearch /></span>
           Details
         </div>
         <div className={`expandable-content ${expandedCards['system-status'] ? 'expanded' : ''}`}>
@@ -45,7 +46,7 @@ const OverviewTab = ({ systemHealth, fraudAnalytics }) => {
 
       <div className="metric-card expandable" onClick={() => toggleCard('fraud-rate')}>
         <div className="metric-header">
-          <span className="metric-icon">🚨</span>
+          <span className="metric-icon"><FiShield /></span>
           <h3>Fraud Rate</h3>
         </div>
         <div className="metric-value">{fraudAnalytics?.fraud_stats?.fraud_rate || 0}%</div>
@@ -53,7 +54,7 @@ const OverviewTab = ({ systemHealth, fraudAnalytics }) => {
           {fraudAnalytics?.fraud_stats?.blocked_count || 0} blocked registrations
         </div>
         <div className="expand-toggle">
-          <span className={`expand-icon ${expandedCards['fraud-rate'] ? 'expanded' : ''}`}>▶</span>
+          <span className={`expand-icon ${expandedCards['fraud-rate'] ? 'expanded' : ''}`}><FiSearch /></span>
           Details
         </div>
         <div className={`expandable-content ${expandedCards['fraud-rate'] ? 'expanded' : ''}`}>
@@ -74,13 +75,13 @@ const OverviewTab = ({ systemHealth, fraudAnalytics }) => {
 
       <div className="metric-card expandable" onClick={() => toggleCard('registrations')}>
         <div className="metric-header">
-          <span className="metric-icon">👥</span>
+          <span className="metric-icon"><FiUsers /></span>
           <h3>Total Registrations</h3>
         </div>
         <div className="metric-value">{fraudAnalytics?.fraud_stats?.total_registrations || 0}</div>
         <div className="metric-change positive">Real-time monitoring</div>
         <div className="expand-toggle">
-          <span className={`expand-icon ${expandedCards['registrations'] ? 'expanded' : ''}`}>▶</span>
+          <span className={`expand-icon ${expandedCards['registrations'] ? 'expanded' : ''}`}><FiSearch /></span>
           Details
         </div>
         <div className={`expandable-content ${expandedCards['registrations'] ? 'expanded' : ''}`}>
@@ -100,13 +101,13 @@ const OverviewTab = ({ systemHealth, fraudAnalytics }) => {
 
       <div className="metric-card expandable" onClick={() => toggleCard('ai-accuracy')}>
         <div className="metric-header">
-          <span className="metric-icon">🤖</span>
+          <span className="metric-icon"><FiCpu /></span>
           <h3>AI Accuracy</h3>
         </div>
         <div className="metric-value">{fraudAnalytics?.ai_model_stats?.model_accuracy || 0}%</div>
         <div className="metric-change positive">Machine learning powered</div>
         <div className="expand-toggle">
-          <span className={`expand-icon ${expandedCards['ai-accuracy'] ? 'expanded' : ''}`}>▶</span>
+          <span className={`expand-icon ${expandedCards['ai-accuracy'] ? 'expanded' : ''}`}><FiSearch /></span>
           Details
         </div>
         <div className={`expandable-content ${expandedCards['ai-accuracy'] ? 'expanded' : ''}`}>
@@ -128,12 +129,12 @@ const OverviewTab = ({ systemHealth, fraudAnalytics }) => {
 
     <div className="charts-section">
       <div className="chart-container">
-        <div className="chart-title">🎯 Risk Distribution</div>
+        <div className="chart-title"><FiBarChart2 /> Risk Distribution</div>
         <RiskDistributionChart data={fraudAnalytics?.risk_distribution} />
       </div>
       
       <div className="chart-container">
-        <div className="chart-title">⚡ Top Risk Factors</div>
+        <div className="chart-title"><FiTarget /> Top Risk Factors</div>
         <RiskFactorsChart data={fraudAnalytics?.top_risk_factors} />
       </div>
     </div>

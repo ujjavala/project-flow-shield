@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import toast from 'react-hot-toast';
+import { FiZap, FiShield, FiTarget, FiAlertTriangle, FiBarChart2, FiTrendingUp, FiSearch, FiRotateCcw, FiPlay, FiActivity } from 'react-icons/fi';
 import './PredictiveAttackTab.css';
 
 const PredictiveAttackTab = () => {
@@ -189,13 +190,13 @@ const PredictiveAttackTab = () => {
   return (
     <div className="predictive-attack-tab">
       <div className="tab-header">
-        <h2>🚀 Predictive Attack Simulation</h2>
+        <h2><FiActivity /> Predictive Attack Simulation</h2>
         <div className="header-actions">
           <button
             className="start-simulation-btn"
             onClick={() => setShowSimulationModal(true)}
           >
-            <span className="icon">⚡</span>
+            <span className="icon"><FiZap /></span>
             Start Attack Simulation
           </button>
         </div>
@@ -205,28 +206,28 @@ const PredictiveAttackTab = () => {
       {dashboardData && (
         <div className="security-overview-cards">
           <div className="overview-card">
-            <div className="card-icon">🛡️</div>
+            <div className="card-icon"><FiShield /></div>
             <div className="card-content">
               <div className="card-value">{dashboardData.overview.systems_monitored}</div>
               <div className="card-label">Systems Monitored</div>
             </div>
           </div>
           <div className="overview-card">
-            <div className="card-icon">🎯</div>
+            <div className="card-icon"><FiTarget /></div>
             <div className="card-content">
               <div className="card-value">{dashboardData.overview.total_simulations}</div>
               <div className="card-label">Attack Simulations</div>
             </div>
           </div>
           <div className="overview-card">
-            <div className="card-icon">⚠️</div>
+            <div className="card-icon"><FiAlertTriangle /></div>
             <div className="card-content">
               <div className="card-value">{dashboardData.high_risk_predictions.length}</div>
               <div className="card-label">High-Risk Predictions</div>
             </div>
           </div>
           <div className="overview-card">
-            <div className="card-icon">📊</div>
+            <div className="card-icon"><FiBarChart2 /></div>
             <div className="card-content">
               <div className="card-value">{dashboardData.security_metrics.security_posture_score.toFixed(1)}</div>
               <div className="card-label">Security Score</div>
@@ -239,7 +240,7 @@ const PredictiveAttackTab = () => {
       {activeSimulations.length > 0 && (
         <div className="active-simulations-alert">
           <div className="alert-content">
-            <span className="alert-icon">🔄</span>
+            <span className="alert-icon"><FiRotateCcw /></span>
             <span className="alert-text">
               {activeSimulations.length} attack simulation{activeSimulations.length > 1 ? 's' : ''} currently running
             </span>
@@ -250,7 +251,7 @@ const PredictiveAttackTab = () => {
       <div className="content-grid">
         {/* High-Risk Predictions Panel */}
         <div className="panel high-risk-predictions">
-          <h3>🎯 High-Risk Attack Predictions</h3>
+          <h3><FiTarget /> High-Risk Attack Predictions</h3>
           <div className="predictions-list">
             {predictions.slice(0, 8).map((prediction) => (
               <div key={prediction.id} className="prediction-item">
@@ -272,7 +273,7 @@ const PredictiveAttackTab = () => {
 
         {/* Recent Simulations */}
         <div className="panel recent-simulations">
-          <h3>⚡ Recent Attack Simulations</h3>
+          <h3><FiZap /> Recent Attack Simulations</h3>
           <div className="simulations-list">
             {simulations.slice(0, 10).map((simulation) => (
               <div
@@ -308,7 +309,7 @@ const PredictiveAttackTab = () => {
 
         {/* Security Metrics */}
         <div className="panel security-metrics">
-          <h3>📈 Security Intelligence Metrics</h3>
+          <h3><FiTrendingUp /> Security Intelligence Metrics</h3>
           {dashboardData && (
             <div className="metrics-grid">
               <div className="metric-item">
@@ -347,7 +348,7 @@ const PredictiveAttackTab = () => {
 
         {/* Top Vulnerabilities */}
         <div className="panel top-vulnerabilities">
-          <h3>🔍 Top Vulnerability Types</h3>
+          <h3><FiSearch /> Top Vulnerability Types</h3>
           <div className="vulnerabilities-list">
             {dashboardData?.top_vulnerabilities.map((vuln, index) => (
               <div key={index} className="vulnerability-item">
@@ -374,7 +375,7 @@ const PredictiveAttackTab = () => {
 
         {/* Continuous Monitoring Control */}
         <div className="panel continuous-monitoring">
-          <h3>🔄 Continuous Attack Monitoring</h3>
+          <h3><FiRotateCcw /> Continuous Attack Monitoring</h3>
           <div className="monitoring-controls">
             {continuousMonitoring ? (
               <div className="monitoring-active">
@@ -427,7 +428,7 @@ const PredictiveAttackTab = () => {
         <div className="modal-overlay" onClick={() => setShowSimulationModal(false)}>
           <div className="modal-content" onClick={e => e.stopPropagation()}>
             <div className="modal-header">
-              <h3>🚀 Start Attack Simulation</h3>
+              <h3><FiPlay /> Start Attack Simulation</h3>
               <button
                 className="close-btn"
                 onClick={() => setShowSimulationModal(false)}
@@ -514,7 +515,7 @@ const PredictiveAttackTab = () => {
                 onClick={startSimulation}
                 disabled={!simulationForm.target_system}
               >
-                🚀 Start Simulation
+                <FiPlay /> Start Simulation
               </button>
             </div>
           </div>
@@ -526,7 +527,7 @@ const PredictiveAttackTab = () => {
         <div className="modal-overlay" onClick={() => setSelectedSimulation(null)}>
           <div className="modal-content large" onClick={e => e.stopPropagation()}>
             <div className="modal-header">
-              <h3>📊 Simulation Details</h3>
+              <h3><FiBarChart2 /> Simulation Details</h3>
               <button
                 className="close-btn"
                 onClick={() => setSelectedSimulation(null)}
