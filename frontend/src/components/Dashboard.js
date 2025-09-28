@@ -203,12 +203,12 @@ const Dashboard = () => {
       <div className="dashboard-header">
         <div className="header-content">
           <div className="welcome-section">
-            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '0.5rem' }}>
-              <FlowShieldLogo size={40} />
-              <h1>FlowShield Security Center</h1>
+            <div className="logo-title-container">
+              <FlowShieldLogo size={48} />
+              <h1>FlowShield Dashboard</h1>
             </div>
             <p className="status-line">
-              AI-Powered intelligent authentication and fraud detection ecosystem
+              AI-Powered authentication and fraud detection ecosystem
             </p>
           </div>
           <div className="header-actions">

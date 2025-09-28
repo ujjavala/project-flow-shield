@@ -225,7 +225,7 @@ const AdminDashboard = () => {
       <div className="dashboard-header">
         <div className="header-title">
           <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-            <FlowShieldLogo size={36} />
+            <FlowShieldLogo size={48} />
             <div>
               <h1>FlowShield Admin Dashboard</h1>
             </div>
