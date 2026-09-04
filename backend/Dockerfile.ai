@@ -7,7 +7,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1
 
 # Install system dependencies including those needed for AI/ML libraries
-RUN apt-get update && apt-get install -y \
+RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     curl \
     g++ \
@@ -42,6 +42,11 @@ COPY . .
 
 # Create directory for ML models
 RUN mkdir -p /app/models
+
+# Create non-root user and run as it
+RUN useradd -m -u 1000 appuser \
+    && chown -R appuser:appuser /app
+USER appuser
 
 # Set Python path
 ENV PYTHONPATH=/app

@@ -32,9 +32,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Install only prebuilt wheels from the disposable builder stage.
+# Also upgrade base-image packaging tooling to clear known CVEs
+# (wheel CVE-2026-24049, setuptools-vendored jaraco.context CVE-2026-23949).
 COPY requirements.txt .
 COPY --from=builder /wheels /wheels
-RUN pip install --no-cache-dir --no-index --find-links=/wheels -r requirements.txt \
+RUN pip install --no-cache-dir --upgrade "wheel>=0.46.2" "setuptools>=80.9.0" \
+    && pip install --no-cache-dir --no-index --find-links=/wheels -r requirements.txt \
     && rm -rf /wheels
 
 # Copy runtime code only. Tests, backup servers, local data, and generated
