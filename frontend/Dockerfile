@@ -18,7 +18,7 @@ ENV VITE_API_URL=$VITE_API_URL \
 
 RUN npm run build
 
-FROM nginxinc/nginx-unprivileged:1.29-alpine
+FROM nginxinc/nginx-unprivileged:1.31-alpine
 
 USER root
 # Pull in patched Alpine packages to clear known OS-level CVEs.
