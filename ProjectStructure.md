@@ -1,30 +1,30 @@
-# 🤖 AI-Powered Authentication System with Temporal.io
+# AI-Powered Authentication System with Temporal.io
 
 ## Project Structure
 
 ```
 project-flow-shield/
-├── README.md                           # 🤖 AI-enhanced project overview
+├── README.md                           # AI-enhanced project overview
 ├── docker-compose.yml                  # Standard setup
-├── docker-compose.ai.yml              # 🤖 Full AI-enhanced setup with Redis, GPU support
+├── docker-compose.ai.yml              # Full AI-enhanced setup with Redis, GPU support
 ├── .env.example                       # Environment variables (include AI API keys)
 ├── .gitignore
-├── FEATURES.md                        # 🤖 AI-powered feature documentation
-├── SETUP.md                          # 🤖 AI-enhanced setup guide
+├── FEATURES.md                        # AI-powered feature documentation
+├── SETUP.md                          # AI-enhanced setup guide
 ├── ProjectStructure.md               # This file
-├── AI_AUTH_FEATURES.md               # 🤖 Revolutionary AI features overview
+├── AI_AUTH_FEATURES.md               # Revolutionary AI features overview
 │
 ├── backend/                          # FastAPI backend with AI/ML capabilities
 │   ├── Dockerfile                    # Standard backend container
-│   ├── Dockerfile.ai                 # 🤖 AI-enhanced container with ML dependencies
+│   ├── Dockerfile.ai                 # AI-enhanced container with ML dependencies
 │   ├── requirements.txt              # Core Python dependencies
-│   ├── requirements-ai.txt           # 🤖 AI/ML dependencies (25+ libraries)
-│   ├── worker.py                     # 🤖 AI-enhanced Temporal worker
+│   ├── requirements-ai.txt           # AI/ML dependencies (25+ libraries)
+│   ├── worker.py                     # AI-enhanced Temporal worker
 │   │
 │   ├── app/
 │   │   ├── __init__.py
-│   │   ├── main.py                   # 🤖 FastAPI app with AI endpoint routing
-│   │   ├── config.py                 # 🤖 Configuration including AI settings
+│   │   ├── main.py                   # FastAPI app with AI endpoint routing
+│   │   ├── config.py                 # Configuration including AI settings
 │   │   │
 │   │   ├── models/                   # Database models
 │   │   │   ├── __init__.py
@@ -34,70 +34,70 @@ project-flow-shield/
 │   │   ├── database/                 # Database layer
 │   │   │   ├── __init__.py
 │   │   │   ├── connection.py         # DB connection with feature store support
-│   │   │   └── migrations.py         # 🤖 Schema including AI audit tables
+│   │   │   └── migrations.py         # Schema including AI audit tables
 │   │   │
-│   │   ├── temporal/                 # 🤖 AI-Enhanced Temporal Integration
+│   │   ├── temporal/                 # AI-Enhanced Temporal Integration
 │   │   │   ├── __init__.py
 │   │   │   ├── client.py             # Temporal client with AI search attributes
 │   │   │   │
-│   │   │   ├── activities/           # 🤖 AI-Powered Activities
+│   │   │   ├── activities/           # AI-Powered Activities
 │   │   │   │   ├── __init__.py
 │   │   │   │   ├── email.py          # Standard email activities
 │   │   │   │   ├── user.py           # User management activities
 │   │   │   │   ├── auth.py           # Authentication activities
-│   │   │   │   ├── ai_auth.py        # 🤖 Basic AI auth activities
-│   │   │   │   └── ai_auth_ml.py     # 🤖 Production ML activities with real models
+│   │   │   │   ├── ai_auth.py        # Basic AI auth activities
+│   │   │   │   └── ai_auth_ml.py     # Production ML activities with real models
 │   │   │   │
-│   │   │   └── workflows/            # 🤖 AI-Enhanced Workflows
+│   │   │   └── workflows/            # AI-Enhanced Workflows
 │   │   │       ├── __init__.py
 │   │   │       ├── user_registration.py      # Original workflow
-│   │   │       ├── user_registration_v2.py   # 🤖 AI-enhanced registration
+│   │   │       ├── user_registration_v2.py   # AI-enhanced registration
 │   │   │       ├── password_reset.py         # Standard password reset
 │   │   │       ├── email_verification.py     # Standard email verification
-│   │   │       └── auth_saga.py              # 🤖 Advanced Saga patterns, child workflows
+│   │   │       └── auth_saga.py              # Advanced Saga patterns, child workflows
 │   │   │
 │   │   ├── services/                 # Business logic layer
 │   │   │   ├── __init__.py
-│   │   │   ├── auth_service.py       # 🤖 Auth service with AI integration
+│   │   │   ├── auth_service.py       # Auth service with AI integration
 │   │   │   ├── user_service.py       # User management
 │   │   │   └── email_service.py      # Email service
 │   │   │
 │   │   ├── api/                      # API endpoints
 │   │   │   ├── __init__.py
-│   │   │   ├── auth.py               # 🤖 Authentication endpoints with AI
+│   │   │   ├── auth.py               # Authentication endpoints with AI
 │   │   │   ├── user.py               # User management endpoints
 │   │   │   ├── oauth.py              # OAuth2 endpoints
-│   │   │   └── ai.py                 # 🤖 AI-specific endpoints and health checks
+│   │   │   └── ai.py                 # AI-specific endpoints and health checks
 │   │   │
 │   │   └── utils/                    # Utilities
 │   │       ├── __init__.py
-│   │       ├── security.py           # 🤖 Security utils with AI password analysis
+│   │       ├── security.py           # Security utils with AI password analysis
 │   │       ├── email.py              # Email utilities
-│   │       └── temporal_utils.py     # 🤖 Temporal utilities with AI search attributes
+│   │       └── temporal_utils.py     # Temporal utilities with AI search attributes
 │   │
-│   ├── models/                       # 🤖 AI/ML Model Storage
-│   │   ├── fraud_detection_v2.pkl    # 🤖 Trained XGBoost fraud detection model
-│   │   ├── password_strength_v1.pkl  # 🤖 Password strength prediction model
-│   │   ├── behavioral_lstm_v1.h5     # 🤖 LSTM behavioral analysis model
-│   │   └── model_metadata.json       # 🤖 Model versions and metadata
+│   ├── models/                       # AI/ML Model Storage
+│   │   ├── fraud_detection_v2.pkl    # Trained XGBoost fraud detection model
+│   │   ├── password_strength_v1.pkl  # Password strength prediction model
+│   │   ├── behavioral_lstm_v1.h5     # LSTM behavioral analysis model
+│   │   └── model_metadata.json       # Model versions and metadata
 │   │
-│   └── tests/                        # 🤖 Comprehensive Testing Suite
+│   └── tests/                        # Comprehensive Testing Suite
 │       ├── __init__.py
 │       ├── unit/                     # Unit tests
 │       │   ├── test_auth.py
 │       │   ├── test_user.py
-│       │   └── test_ai_activities.py # 🤖 AI activity unit tests
+│       │   └── test_ai_activities.py # AI activity unit tests
 │       │
 │       ├── integration/              # Integration tests
 │       │   ├── test_api.py
 │       │   ├── test_workflows.py
-│       │   └── test_ai_integration.py # 🤖 AI integration tests
+│       │   └── test_ai_integration.py # AI integration tests
 │       │
-│       └── temporal/                 # 🤖 Advanced Temporal Testing
+│       └── temporal/                 # Advanced Temporal Testing
 │           ├── __init__.py
-│           ├── test_workflows.py     # 🤖 Workflow replay, mocking, performance tests
-│           ├── test_ai_workflows.py  # 🤖 AI-specific workflow tests
-│           └── test_saga_patterns.py # 🤖 Saga pattern and compensation tests
+│           ├── test_workflows.py     # Workflow replay, mocking, performance tests
+│           ├── test_ai_workflows.py  # AI-specific workflow tests
+│           └── test_saga_patterns.py # Saga pattern and compensation tests
 │
 ├── frontend/                         # React frontend
 │   ├── Dockerfile
@@ -108,44 +108,44 @@ project-flow-shield/
 │   │
 │   ├── src/
 │   │   ├── index.js
-│   │   ├── App.js                    # 🤖 Main app with AI insights display
+│   │   ├── App.js                    # Main app with AI insights display
 │   │   │
 │   │   ├── components/               # React components
-│   │   │   ├── Login.js              # 🤖 Login form with behavioral analysis
-│   │   │   ├── Register.js           # 🤖 Registration with real-time AI feedback
-│   │   │   ├── Dashboard.js          # 🤖 Dashboard showing AI insights
+│   │   │   ├── Login.js              # Login form with behavioral analysis
+│   │   │   ├── Register.js           # Registration with real-time AI feedback
+│   │   │   ├── Dashboard.js          # Dashboard showing AI insights
 │   │   │   ├── PasswordReset.js      # Password reset flow
 │   │   │   └── EmailVerification.js  # Email verification
 │   │   │
 │   │   ├── context/                  # React context
-│   │   │   └── AuthContext.js        # 🤖 Auth context with AI insights
+│   │   │   └── AuthContext.js        # Auth context with AI insights
 │   │   │
 │   │   ├── services/                 # API services
-│   │   │   ├── authService.js        # 🤖 Auth API calls with AI response handling
+│   │   │   ├── authService.js        # Auth API calls with AI response handling
 │   │   │   ├── userService.js        # User API calls
-│   │   │   └── aiService.js          # 🤖 AI-specific API calls
+│   │   │   └── aiService.js          # AI-specific API calls
 │   │   │
 │   │   ├── utils/                    # Frontend utilities
 │   │   │   ├── api.js                # API configuration
-│   │   │   ├── validation.js         # 🤖 Form validation with AI-enhanced feedback
+│   │   │   ├── validation.js         # Form validation with AI-enhanced feedback
 │   │   │   └── constants.js          # Constants
 │   │   │
 │   │   └── styles/                   # CSS styles
 │   │       ├── index.css
 │   │       ├── components.css
-│   │       └── ai-components.css     # 🤖 Styles for AI-specific components
+│   │       └── ai-components.css     # Styles for AI-specific components
 │   │
 │   └── node_modules/                 # Node.js dependencies
 │
-└── docs/                             # 📚 Documentation
-    ├── API.md                        # 🤖 API documentation with AI endpoints
-    ├── DEPLOYMENT.md                 # 🤖 Deployment guide with AI considerations
-    ├── TEMPORAL_PATTERNS.md          # 🤖 Advanced Temporal patterns documentation
-    ├── AI_ARCHITECTURE.md            # 🤖 AI/ML architecture deep dive
+└── docs/                             # Documentation
+  ├── API.md                        # API documentation with AI endpoints
+  ├── DEPLOYMENT.md                 # Deployment guide with AI considerations
+  ├── TEMPORAL_PATTERNS.md          # Advanced Temporal patterns documentation
+  ├── AI_ARCHITECTURE.md            # AI/ML architecture deep dive
     └── CONTRIBUTING.md               # Contribution guidelines
 ```
 
-## 🤖 AI-Enhanced Components Breakdown
+## AI-Enhanced Components Breakdown
 
 ### **Backend AI Architecture**
 
@@ -154,19 +154,19 @@ project-flow-shield/
 class AIAuthMLActivities:
     """Production AI-powered authentication activities"""
     
-    # 🧠 ML Models
+    # ML Models
     - XGBoost fraud detection ensemble
     - LSTM behavioral analysis networks
     - Transformer-based email intelligence
     - Anomaly detection with Isolation Forest
     - Password security deep learning models
     
-    # 🤖 GenAI Integration  
+    # GenAI Integration
     - OpenAI GPT for content generation
     - Anthropic Claude for security explanations
     - Sentence transformers for semantic analysis
     
-    # ⚡ Real-time Features
+    # Real-time Features
     - Redis model caching (sub-100ms responses)
     - Online learning with streaming updates
     - A/B testing for model deployment
@@ -177,14 +177,14 @@ class AIAuthMLActivities:
 class AuthenticationSagaWorkflow:
     """Distributed AI-enhanced authentication saga"""
     
-    # 🔄 Saga Steps with AI
+    # Saga Steps with AI
     1. AI fraud detection (compensatable)
     2. User account creation (compensatable) 
     3. AI-optimized email verification (compensatable)
     4. Service provisioning (compensatable)
     5. Finalization (non-compensatable)
     
-    # 🛡️ Compensation Logic
+    # Compensation Logic
     - Automatic rollback on AI-detected failures
     - Partial compensation handling
     - AI-driven rollback decisions
@@ -192,7 +192,7 @@ class AuthenticationSagaWorkflow:
 class AdaptiveAuthenticationWorkflow:
     """Real-time adaptive auth with Temporal signals"""
     
-    # 📡 AI-Driven Signals
+    # AI-Driven Signals
     - Real-time risk score updates
     - Dynamic security requirement adjustments
     - Behavioral anomaly alerts
@@ -203,17 +203,17 @@ class AdaptiveAuthenticationWorkflow:
 class TestAIWorkflows:
     """Comprehensive AI + Temporal testing"""
     
-    # 🔄 Replay Testing
+    # Replay Testing
     - ML workflow determinism validation
     - Model version compatibility testing
     - AI decision consistency verification
     
-    # 🎭 AI Mocking
+    # AI Mocking
     - ML model response simulation  
     - Fraud detection scenario testing
     - Behavioral analysis mocking
     
-    # 📊 Performance Testing
+    # Performance Testing
     - Concurrent AI workflow execution
     - ML model latency benchmarking
     - Cache hit rate optimization
@@ -230,7 +230,7 @@ class TestAIWorkflows:
 ```javascript
 // services/aiService.js
 class AIService {
-  // 🤖 Real-time AI features
+  // Real-time AI features
   async analyzeFraudRisk(registrationData)
   async getPasswordStrength(password, context)  
   async getBehavioralInsights(sessionData)
@@ -246,22 +246,22 @@ class AIService {
 services:
   backend:
     build: 
-      dockerfile: Dockerfile.ai  # 🤖 Pre-installed ML libraries
+      dockerfile: Dockerfile.ai  # Pre-installed ML libraries
     volumes:
-      - ai_models:/app/models    # 🤖 Persistent model storage
+      - ai_models:/app/models    # Persistent model storage
     environment:
-      - REDIS_HOST=redis         # 🤖 Model caching
+      - REDIS_HOST=redis         # Model caching
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - AI_FALLBACK_ENABLED=true
       
-  redis:                         # 🤖 AI model cache
+  redis:                         # AI model cache
     image: redis:7-alpine
     volumes:
       - redis_data:/data
       
   worker:
     build:
-      dockerfile: Dockerfile.ai  # 🤖 AI-capable worker
+      dockerfile: Dockerfile.ai  # AI-capable worker
     environment:
       - AI_MODEL_CACHE_TTL=86400
 ```
@@ -272,60 +272,60 @@ services:
 ```
 models/
 ├── fraud_detection/
-│   ├── xgboost_v2.1.pkl       # 🤖 Main fraud detection model
-│   ├── feature_scaler.pkl     # 🤖 Feature preprocessing
-│   └── model_metadata.json    # 🤖 Version, accuracy, training date
+│   ├── xgboost_v2.1.pkl       # Main fraud detection model
+│   ├── feature_scaler.pkl     # Feature preprocessing
+│   └── model_metadata.json    # Version, accuracy, training date
 │
 ├── password_analysis/
-│   ├── strength_model_v1.pkl  # 🤖 Password strength predictor
-│   ├── pattern_detector.pkl   # 🤖 Pattern analysis model
-│   └── breach_embeddings.npy  # 🤖 Breach similarity vectors
+│   ├── strength_model_v1.pkl  # Password strength predictor
+│   ├── pattern_detector.pkl   # Pattern analysis model
+│   └── breach_embeddings.npy  # Breach similarity vectors
 │
 ├── behavioral_auth/
-│   ├── lstm_behavioral.h5     # 🤖 LSTM behavioral model
-│   ├── anomaly_detector.pkl   # 🤖 Isolation Forest model
-│   └── user_baselines.pkl     # 🤖 User behavioral baselines
+│   ├── lstm_behavioral.h5     # LSTM behavioral model
+│   ├── anomaly_detector.pkl   # Isolation Forest model
+│   └── user_baselines.pkl     # User behavioral baselines
 │
 └── nlp_models/
-    ├── email_classifier.pkl   # 🤖 Email intelligence model
-    ├── sentence_transformer/  # 🤖 Semantic analysis models
-    └── spacy_models/          # 🤖 NLP processing models
+    ├── email_classifier.pkl   # Email intelligence model
+    ├── sentence_transformer/  # Semantic analysis models
+    └── spacy_models/          # NLP processing models
 ```
 
-## 🚀 Deployment Architecture
+## Deployment Architecture
 
 ### **Production AI Deployment**
 ```
-🌐 Load Balancer
+Load Balancer
     │
-    ├── 🤖 AI-Enhanced Backend Instances (3x)
+    ├── AI-Enhanced Backend Instances (3x)
     │   ├── FastAPI with AI endpoints
     │   ├── ML model serving
     │   └── Feature store integration
     │
-    ├── 🔄 AI-Capable Temporal Workers (5x)
+    ├── AI-Capable Temporal Workers (5x)
     │   ├── Fraud detection activities
     │   ├── Behavioral analysis activities
     │   └── Email optimization activities
     │
-    ├── ⚡ Redis Cluster (AI Model Cache)
+    ├── Redis Cluster (AI Model Cache)
     │   ├── Model storage and versioning
     │   ├── Real-time feature cache
     │   └── Prediction result cache
     │
-    ├── 🧠 ML Model Store
+    ├── ML Model Store
     │   ├── Model artifacts (S3/GCS)
     │   ├── A/B testing infrastructure
     │   └── Model monitoring dashboards
     │
-    └── 📊 AI Observability Stack
+    └── AI Observability Stack
         ├── Model performance monitoring
         ├── AI decision audit logs  
         ├── Bias and fairness tracking
         └── Real-time alerting
 ```
 
-## 🎯 Key AI Differentiators
+## Key AI Differentiators
 
 ### **1. Production-Ready AI Integration**
 - **Real ML Models**: Not just demos - actual XGBoost, TensorFlow, transformers

@@ -1,0 +1,35 @@
+{
+  "schema_version": "1",
+  "cases": [
+    {
+      "id": "baseline-known-context",
+      "features": {},
+      "expected": {"outcome": "allow", "score": 0, "leading_reason": "BASELINE_RISK_ACCEPTABLE"}
+    },
+    {
+      "id": "new-network-and-device-with-failure",
+      "features": {"known_network": false, "known_device": false, "recent_failed_attempts": 1},
+      "expected": {"outcome": "step_up", "score": 38, "leading_reason": "NEW_NETWORK"}
+    },
+    {
+      "id": "impossible-travel-combination",
+      "features": {"known_network": false, "known_device": false, "impossible_travel": true},
+      "expected": {"outcome": "review", "score": 65, "leading_reason": "NEW_NETWORK"}
+    },
+    {
+      "id": "blocked-source-fails-closed",
+      "features": {"source_ip_blocked": true, "known_network": true},
+      "expected": {"outcome": "deny", "score": 100, "leading_reason": "SOURCE_NETWORK_BLOCKED"}
+    },
+    {
+      "id": "compromised-credential-fails-closed",
+      "features": {"credential_compromise_suspected": true},
+      "expected": {"outcome": "deny", "score": 100, "leading_reason": "CREDENTIAL_COMPROMISE_SUSPECTED"}
+    },
+    {
+      "id": "disabled-account-denied",
+      "features": {"account_disabled": true},
+      "expected": {"outcome": "deny", "score": 100, "leading_reason": "ACCOUNT_DISABLED"}
+    }
+  ]
+}

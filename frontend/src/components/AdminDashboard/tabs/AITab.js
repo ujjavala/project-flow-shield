@@ -1,5 +1,5 @@
 import React from 'react';
-import { FiCpu, FiZap, FiBarChart2 } from 'react-icons/fi';
+import { Cpu as FiCpu, Zap as FiZap, BarChart2 as FiBarChart2, Users as FiUsers } from 'lucide-react';
 
 const AITab = ({ aiStatus, fraudAnalytics, onRefresh }) => (
   <div className="ai-tab">
@@ -42,6 +42,20 @@ const AITab = ({ aiStatus, fraudAnalytics, onRefresh }) => (
         <div className="ai-details">
           <p>Total Requests: {fraudAnalytics?.ai_model_stats?.total_ai_requests || 0}</p>
           <p>Availability: {fraudAnalytics?.ai_model_stats?.ai_availability || 0}%</p>
+        </div>
+      </div>
+
+      <div className="ai-card">
+        <div className="ai-header">
+          <span className="ai-icon"><FiUsers /></span>
+          <h3>Privileged Access Advisors</h3>
+          <span className="status-badge healthy">Human controlled</span>
+        </div>
+        <div className="ai-details">
+          <p>Agents: Least privilege + Security context</p>
+          <p>Orchestration: Parallel Temporal activities</p>
+          <p>Authority: Advisory only; human approval is mandatory</p>
+          <p>Data boundary: Sanitized feature buckets, no credentials or tokens</p>
         </div>
       </div>
     </div>

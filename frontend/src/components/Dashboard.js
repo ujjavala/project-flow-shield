@@ -6,16 +6,17 @@ import MetricCard from './Dashboard/components/MetricCard';
 import HealthCard from './Dashboard/components/HealthCard';
 import FlowShieldLogo from './common/FlowShieldLogo';
 import './common/FlowShieldLogo.css';
+import { authenticatedFetch } from '../services/bffService';
 import {
-  FiSettings,
-  FiLock,
-  FiUnlock,
-  FiAlertTriangle,
-  FiCheckCircle,
-  FiMail,
-  FiGlobe,
-  FiFileText
-} from 'react-icons/fi';
+  Settings as FiSettings,
+  Lock as FiLock,
+  Unlock as FiUnlock,
+  TriangleAlert as FiAlertTriangle,
+  CheckCircle as FiCheckCircle,
+  Mail as FiMail,
+  Globe as FiGlobe,
+  FileText as FiFileText
+} from 'lucide-react';
 
 const Dashboard = () => {
   const { user, logout } = useAuth();
@@ -110,24 +111,14 @@ const Dashboard = () => {
       setUserProfile(user);
 
       // Fetch user-specific data from backend
-      const token = localStorage.getItem('token');
-      if (!token) {
-        console.warn('No authentication token found');
-        setLoading(false);
-        return;
-      }
-
-      const baseUrl = 'http://localhost:8000';
-      const headers = {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json'
-      };
+      const baseUrl = '';
+      const headers = { 'Content-Type': 'application/json' };
 
       try {
         const [profileResponse, activityResponse, securityResponse] = await Promise.allSettled([
-          fetch(`${baseUrl}/dashboard/profile`, { headers }),
-          fetch(`${baseUrl}/dashboard/activity`, { headers }),
-          fetch(`${baseUrl}/dashboard/security`, { headers })
+          authenticatedFetch(`${baseUrl}/dashboard/profile`, { headers }),
+          authenticatedFetch(`${baseUrl}/dashboard/activity`, { headers }),
+          authenticatedFetch(`${baseUrl}/dashboard/security`, { headers })
         ]);
 
         if (profileResponse.status === 'fulfilled' && profileResponse.value.ok) {

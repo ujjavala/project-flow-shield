@@ -1,6 +1,6 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { FiShield, FiLock, FiZap, FiBarChart2, FiKey, FiSettings } from 'react-icons/fi';
+import { Shield as FiShield, Lock as FiLock, Zap as FiZap, BarChart2 as FiBarChart2, Key as FiKey, Settings as FiSettings } from 'lucide-react';
 import FlowShieldLogo from './common/FlowShieldLogo';
 import './LandingPage.css';
 import './common/FlowShieldLogo.css';

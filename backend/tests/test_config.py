@@ -1,6 +1,8 @@
 import pytest
-from unittest.mock import patch
-import os
+
+from pydantic import ValidationError
+
+from app.config import Settings
 
 
 def test_config_loading():
@@ -25,6 +27,33 @@ def test_database_url_configuration():
     
     # Should have database-related settings
     assert hasattr(settings, 'DATABASE_URL') or hasattr(settings, 'DB_USER')
+
+
+def test_production_rejects_local_security_defaults():
+    with pytest.raises(ValidationError, match="Invalid production security configuration"):
+        Settings(ENVIRONMENT="production", _env_file=None)
+
+
+def test_production_accepts_explicit_secure_configuration():
+    configured = Settings(
+        ENVIRONMENT="production",
+        JWT_SECRET_KEY="j" * 48,
+        OAUTH2_CLIENT_SECRET="o" * 48,
+        MFA_ENCRYPTION_KEY="configured-encryption-key",
+        BFF_COOKIE_SECURE=True,
+        OIDC_ISSUER="https://identity.example.com",
+        OIDC_SIGNING_KEY_PATH="/run/secrets/oidc-private.pem",
+        OIDC_ACTIVE_KEY_ID="production-key-1",
+        OAUTH2_REDIRECT_URI="https://app.example.com/callback",
+        FRONTEND_URL="https://app.example.com",
+        BACKEND_URL="https://api.example.com",
+        DATABASE_URL="postgresql://flowshield:managed-secret@database.example.com/flowshield",
+        EMAIL_DELIVERY_MODE="smtp",
+        OTEL_EXPORTER_OTLP_INSECURE=False,
+        _env_file=None,
+    )
+
+    assert configured.BFF_COOKIE_SECURE is True
 
 
 def test_email_configuration():

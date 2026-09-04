@@ -1,12 +1,14 @@
+import { vi } from 'vitest';
+
 // Mock implementation of auth service for testing
 export const authService = {
-  login: jest.fn(),
-  register: jest.fn(),
-  logout: jest.fn(),
-  getCurrentUser: jest.fn(),
-  getAccessToken: jest.fn(),
-  refreshToken: jest.fn(),
-  requestPasswordReset: jest.fn(),
-  resetPassword: jest.fn(),
-  verifyEmail: jest.fn(),
+  login: vi.fn(),
+  register: vi.fn(),
+  logout: vi.fn(),
+  getCurrentUser: vi.fn(),
+  getAccessToken: vi.fn(),
+  refreshToken: vi.fn(),
+  requestPasswordReset: vi.fn(),
+  resetPassword: vi.fn(),
+  verifyEmail: vi.fn(),
 };

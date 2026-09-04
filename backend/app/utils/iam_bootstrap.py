@@ -5,6 +5,10 @@ Creates initial IAM data including roles, permissions, scopes, and test users
 
 import logging
 import asyncio
+import json
+import os
+from pathlib import Path
+import secrets
 from datetime import datetime, timedelta
 from typing import Dict, List
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -17,8 +21,20 @@ from app.models.iam import (
     user_roles_table, role_permissions_table, user_scopes_table
 )
 from app.utils.security import hash_password
+from app.config import settings
 
 logger = logging.getLogger(__name__)
+
+DEMO_ROLE_ASSIGNMENTS = {
+    'super.admin@temporal-auth.com': ('super_admin', ['acme_corp']),
+    'admin@temporal-auth.com': ('admin', ['acme_corp']),
+    'manager@temporal-auth.com': ('manager', ['acme_corp', 'engineering']),
+    'moderator@temporal-auth.com': ('moderator', ['engineering']),
+    'analyst@temporal-auth.com': ('analyst', ['marketing']),
+    'user@temporal-auth.com': ('user', ['frontend_team']),
+    'guest@temporal-auth.com': ('guest', []),
+}
+
 
 class IAMBootstrap:
     """Bootstrap IAM system with initial data"""
@@ -71,7 +87,7 @@ class IAMBootstrap:
                     'success': True,
                     'message': 'IAM system bootstrapped successfully',
                     'created_items': self.created_items,
-                    'test_credentials': self._get_test_credentials()
+                    'credentials_generated': bool(os.getenv("DEMO_CREDENTIALS_PATH")),
                 }
 
         except Exception as e:
@@ -547,11 +563,25 @@ class IAMBootstrap:
     async def _create_test_users(self, db: AsyncSession):
         """Create test users with different roles"""
 
+        if settings.ENVIRONMENT not in {"local", "development", "test"}:
+            logger.info("Demo identity seeding is disabled outside local environments")
+            return
+
+        credentials_path = os.getenv("DEMO_CREDENTIALS_PATH")
+        passwords: Dict[str, str] = {}
+        if credentials_path and Path(credentials_path).exists():
+            passwords = json.loads(Path(credentials_path).read_text(encoding="utf-8"))
+
+        def password_for(email: str) -> str:
+            if email not in passwords:
+                passwords[email] = secrets.token_urlsafe(24)
+            return passwords[email]
+
         test_users = [
             {
                 'email': 'super.admin@temporal-auth.com',
                 'username': 'superadmin',
-                'password': 'SuperAdmin123!',
+                'password': password_for('super.admin@temporal-auth.com'),
                 'first_name': 'Super',
                 'last_name': 'Administrator',
                 'role': 'admin',  # Legacy field
@@ -562,8 +592,8 @@ class IAMBootstrap:
             },
             {
                 'email': 'admin@temporal-auth.com',
-                'username': 'admin',
-                'password': 'Admin123!',
+                'username': 'flowadmin',
+                'password': password_for('admin@temporal-auth.com'),
                 'first_name': 'System',
                 'last_name': 'Admin',
                 'role': 'admin',  # Legacy field
@@ -575,7 +605,7 @@ class IAMBootstrap:
             {
                 'email': 'manager@temporal-auth.com',
                 'username': 'manager',
-                'password': 'Manager123!',
+                'password': password_for('manager@temporal-auth.com'),
                 'first_name': 'Team',
                 'last_name': 'Manager',
                 'role': 'moderator',  # Legacy field
@@ -587,7 +617,7 @@ class IAMBootstrap:
             {
                 'email': 'moderator@temporal-auth.com',
                 'username': 'moderator',
-                'password': 'Moderator123!',
+                'password': password_for('moderator@temporal-auth.com'),
                 'first_name': 'Content',
                 'last_name': 'Moderator',
                 'role': 'moderator',  # Legacy field
@@ -599,7 +629,7 @@ class IAMBootstrap:
             {
                 'email': 'analyst@temporal-auth.com',
                 'username': 'analyst',
-                'password': 'Analyst123!',
+                'password': password_for('analyst@temporal-auth.com'),
                 'first_name': 'Data',
                 'last_name': 'Analyst',
                 'role': 'user',  # Legacy field
@@ -611,7 +641,7 @@ class IAMBootstrap:
             {
                 'email': 'user@temporal-auth.com',
                 'username': 'regularuser',
-                'password': 'User123!',
+                'password': password_for('user@temporal-auth.com'),
                 'first_name': 'Regular',
                 'last_name': 'User',
                 'role': 'user',  # Legacy field
@@ -623,7 +653,7 @@ class IAMBootstrap:
             {
                 'email': 'guest@temporal-auth.com',
                 'username': 'guestuser',
-                'password': 'Guest123!',
+                'password': password_for('guest@temporal-auth.com'),
                 'first_name': 'Guest',
                 'last_name': 'User',
                 'role': 'user',  # Legacy field
@@ -633,6 +663,12 @@ class IAMBootstrap:
                 'iam_role': 'guest'
             }
         ]
+
+        if credentials_path:
+            path = Path(credentials_path)
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(json.dumps(passwords, indent=2), encoding="utf-8")
+            path.chmod(0o600)
 
         for user_data in test_users:
             # Check if user already exists
@@ -645,6 +681,7 @@ class IAMBootstrap:
             iam_role = user_data.pop('iam_role')
 
             if existing_user:
+                existing_user.hashed_password = hash_password(user_data.pop('password'))
                 # Update existing user with admin privileges if needed
                 if user_data.get('is_superuser') or user_data.get('role') in ['admin', 'moderator']:
                     existing_user.role = user_data.get('role', existing_user.role)
@@ -659,8 +696,6 @@ class IAMBootstrap:
                     await db.flush()
                     logger.info(f"Updated existing user {existing_user.email} with admin privileges (role: {existing_user.role}, superuser: {existing_user.is_superuser})")
 
-                # Store for role assignment
-                existing_user.iam_role_to_assign = iam_role
                 self.created_items['users'].append({
                     'email': existing_user.email,
                     'username': existing_user.username,
@@ -676,8 +711,6 @@ class IAMBootstrap:
             db.add(user)
             await db.flush()
 
-            # Store for role assignment
-            user.iam_role_to_assign = iam_role
             self.created_items['users'].append({
                 'email': user.email,
                 'username': user.username,
@@ -699,10 +732,11 @@ class IAMBootstrap:
 
         # Assign roles to users
         for user in users:
-            if not hasattr(user, 'iam_role_to_assign'):
+            assignment = DEMO_ROLE_ASSIGNMENTS.get(user.email)
+            if assignment is None:
                 continue
 
-            role_name = user.iam_role_to_assign
+            role_name, scope_names = assignment
             if role_name not in roles:
                 continue
 
@@ -715,31 +749,18 @@ class IAMBootstrap:
                     (user_roles_table.c.role_id == role.id)
                 )
             )
-            if existing.first():
-                continue
-
-            # Assign role to user
-            await db.execute(
-                user_roles_table.insert().values(
-                    user_id=user.id,
-                    role_id=role.id,
-                    granted_at=datetime.now(),
-                    is_active=True
+            if not existing.first():
+                # Assign role to user
+                await db.execute(
+                    user_roles_table.insert().values(
+                        user_id=user.id,
+                        role_id=role.id,
+                        granted_at=datetime.now(),
+                        is_active=True
+                    )
                 )
-            )
 
-            # Assign scope based on role
-            scope_assignments = {
-                'super_admin': ['acme_corp'],
-                'admin': ['acme_corp'],
-                'manager': ['acme_corp', 'engineering'],
-                'moderator': ['engineering'],
-                'analyst': ['marketing'],
-                'user': ['frontend_team'],
-                'guest': []
-            }
-
-            scope_names = scope_assignments.get(role_name, [])
+            # Reconcile scopes independently so interrupted or partial seed runs heal.
             for scope_name in scope_names:
                 if scope_name in scopes:
                     scope = scopes[scope_name]
@@ -775,68 +796,6 @@ class IAMBootstrap:
         # This would create sample resources that users can access
         # For now, we'll skip this as it's mainly for demonstration
         pass
-
-    def _get_test_credentials(self) -> Dict[str, Dict[str, str]]:
-        """Get test user credentials"""
-
-        return {
-            'super_admin': {
-                'email': 'super.admin@temporal-auth.com',
-                'username': 'superadmin',
-                'password': 'SuperAdmin123!',
-                'role': 'Super Administrator',
-                'permissions': 'All permissions',
-                'scopes': 'Global (ACME Corp)'
-            },
-            'admin': {
-                'email': 'admin@temporal-auth.com',
-                'username': 'admin',
-                'password': 'Admin123!',
-                'role': 'Administrator',
-                'permissions': 'Most admin permissions',
-                'scopes': 'Global (ACME Corp)'
-            },
-            'manager': {
-                'email': 'manager@temporal-auth.com',
-                'username': 'manager',
-                'password': 'Manager123!',
-                'role': 'Manager',
-                'permissions': 'Team management, analytics',
-                'scopes': 'ACME Corp, Engineering Dept'
-            },
-            'moderator': {
-                'email': 'moderator@temporal-auth.com',
-                'username': 'moderator',
-                'password': 'Moderator123!',
-                'role': 'Moderator',
-                'permissions': 'Content moderation, user viewing',
-                'scopes': 'Engineering Department'
-            },
-            'analyst': {
-                'email': 'analyst@temporal-auth.com',
-                'username': 'analyst',
-                'password': 'Analyst123!',
-                'role': 'Data Analyst',
-                'permissions': 'Analytics, reporting',
-                'scopes': 'Marketing Department'
-            },
-            'user': {
-                'email': 'user@temporal-auth.com',
-                'username': 'regularuser',
-                'password': 'User123!',
-                'role': 'Standard User',
-                'permissions': 'Own profile management',
-                'scopes': 'Frontend Team'
-            },
-            'guest': {
-                'email': 'guest@temporal-auth.com',
-                'username': 'guestuser',
-                'password': 'Guest123!',
-                'role': 'Guest User',
-                'permissions': 'Limited read-only',
-                'scopes': 'None'
-            }
-        }
 
 # Global bootstrap instance
 bootstrap = IAMBootstrap()

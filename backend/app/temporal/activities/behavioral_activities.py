@@ -525,7 +525,7 @@ class BehavioralActivities:
                         avg_distance = sum(distances) / len(distances)
 
                         # Check for impossible travel
-                        if location_history and len(location_history) > 1:
+                        if location_history:
                             try:
                                 recent_geo = json.loads(location_history[0][0])
                                 recent_timestamp = datetime.fromisoformat(location_history[0][1])

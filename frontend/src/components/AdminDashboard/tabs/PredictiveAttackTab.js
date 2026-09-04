@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import toast from 'react-hot-toast';
-import { FiZap, FiShield, FiTarget, FiAlertTriangle, FiBarChart2, FiTrendingUp, FiSearch, FiRotateCcw, FiPlay, FiActivity } from 'react-icons/fi';
+import { Zap as FiZap, Shield as FiShield, Target as FiTarget, TriangleAlert as FiAlertTriangle, BarChart2 as FiBarChart2, TrendingUp as FiTrendingUp, Search as FiSearch, RotateCcw as FiRotateCcw, Play as FiPlay, Activity as FiActivity } from 'lucide-react';
 import './PredictiveAttackTab.css';
+import { authenticatedFetch } from '../../../services/bffService';
 
 const PredictiveAttackTab = () => {
   const [dashboardData, setDashboardData] = useState(null);
@@ -29,17 +30,13 @@ const PredictiveAttackTab = () => {
 
   const loadDashboardData = async () => {
     try {
-      const token = localStorage.getItem('admin_token');
-      const headers = {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json'
-      };
+      const headers = { 'Content-Type': 'application/json' };
 
       // Load all data in parallel
       const [dashboardRes, simulationsRes, predictionsRes] = await Promise.all([
-        fetch('/api/predictive-attack/dashboard', { headers }),
-        fetch('/api/predictive-attack/simulations?limit=20', { headers }),
-        fetch('/api/predictive-attack/predictions?limit=15', { headers })
+        authenticatedFetch('/api/predictive-attack/dashboard', { headers }),
+        authenticatedFetch('/api/predictive-attack/simulations?limit=20', { headers }),
+        authenticatedFetch('/api/predictive-attack/predictions?limit=15', { headers })
       ]);
 
       if (dashboardRes.ok) {
@@ -68,11 +65,9 @@ const PredictiveAttackTab = () => {
 
   const startSimulation = async () => {
     try {
-      const token = localStorage.getItem('admin_token');
-      const response = await fetch('/api/predictive-attack/simulate', {
+      const response = await authenticatedFetch('/api/predictive-attack/simulate', {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         },
         body: JSON.stringify(simulationForm)
@@ -95,14 +90,11 @@ const PredictiveAttackTab = () => {
 
   const toggleContinuousMonitoring = async (system) => {
     try {
-      const token = localStorage.getItem('admin_token');
-
       if (continuousMonitoring && continuousMonitoring.target_system === system) {
         // Stop monitoring
-        const response = await fetch(`/api/predictive-attack/continuous-monitoring/${continuousMonitoring.monitoring_id}/stop`, {
+        const response = await authenticatedFetch(`/api/predictive-attack/continuous-monitoring/${continuousMonitoring.monitoring_id}/stop`, {
           method: 'POST',
           headers: {
-            'Authorization': `Bearer ${token}`,
             'Content-Type': 'application/json'
           }
         });
@@ -113,10 +105,9 @@ const PredictiveAttackTab = () => {
         }
       } else {
         // Start monitoring
-        const response = await fetch('/api/predictive-attack/continuous-monitoring/start', {
+        const response = await authenticatedFetch('/api/predictive-attack/continuous-monitoring/start', {
           method: 'POST',
           headers: {
-            'Authorization': `Bearer ${token}`,
             'Content-Type': 'application/json'
           },
           body: JSON.stringify({
@@ -139,10 +130,8 @@ const PredictiveAttackTab = () => {
 
   const viewSimulationDetails = async (simulationId) => {
     try {
-      const token = localStorage.getItem('admin_token');
-      const response = await fetch(`/api/predictive-attack/simulation/${simulationId}/status`, {
+      const response = await authenticatedFetch(`/api/predictive-attack/simulation/${simulationId}/status`, {
         headers: {
-          'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         }
       });

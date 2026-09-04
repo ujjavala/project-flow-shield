@@ -1,22 +1,22 @@
-# 🤖 AI-Powered Authentication API Documentation
+# AI-Powered Authentication API Documentation
 
-## 🚀 Overview
+## Overview
 
 The **AI-Enhanced OAuth2 Authentication API** provides next-generation authentication and authorization services using **AI/ML models** and **Temporal.io workflows** for intelligent, reliable operations. This is the world's first authentication API that combines:
 
-- 🧠 **Real-time AI fraud detection** with 95%+ accuracy
-- ⚡ **Behavioral biometrics** using LSTM neural networks
-- 🛡️ **Adaptive authentication** with ML-driven security requirements
-- 🌊 **Temporal workflow reliability** with AI-powered compensation patterns
+- **Real-time AI fraud detection** with 95%+ accuracy
+- **Behavioral biometrics** using LSTM neural networks
+- **Adaptive authentication** with ML-driven security requirements
+- **Temporal workflow reliability** with AI-powered compensation patterns
 
 All endpoints are documented with **OpenAPI/Swagger** and available at http://localhost:8000/docs.
 
-## 🔗 Base URLs
+## Base URLs
 
 - **Development**: `http://localhost:8000`
 - **Production**: `https://your-domain.com`
 
-## 🔐 Authentication
+## Authentication
 
 ### Bearer Token Authentication
 ```bash
@@ -27,9 +27,9 @@ Most endpoints require a valid JWT access token in the Authorization header.
 
 ---
 
-## 👤 User Management Endpoints
+## User Management Endpoints
 
-### POST `/user/register` 🧠
+### POST `/user/register`
 Register a new user account with **AI-powered fraud detection** and intelligent email verification.
 
 **Request Body:**
@@ -69,11 +69,11 @@ Register a new user account with **AI-powered fraud detection** and intelligent 
 ```
 
 **AI-Powered Temporal Workflow:** `UserRegistrationWorkflowV2`
-- 🤖 **Real-time fraud detection** with XGBoost ensemble models
-- 🧠 **Email intelligence analysis** using transformers
-- ⚡ **Behavioral pattern analysis** with deep learning
-- 🛡️ **Adaptive security requirements** based on risk score
-- 📧 **AI-optimized email delivery** with personalization
+- **Real-time fraud detection** with XGBoost ensemble models
+- **Email intelligence analysis** using transformers
+- **Behavioral pattern analysis** with deep learning
+- **Adaptive security requirements** based on risk score
+- **AI-optimized email delivery** with personalization
 
 **AI-Enhanced Example:**
 ```bash
@@ -106,7 +106,7 @@ curl -X POST http://localhost:8000/user/register \
 
 ---
 
-### POST `/user/login` 🤖
+### POST `/user/login`
 Authenticate user with **AI-powered adaptive authentication** and behavioral biometrics.
 
 **Request Body:**
@@ -248,7 +248,7 @@ Get current user profile information.
 
 ---
 
-## 📧 Email Verification Endpoints
+## Email Verification Endpoints
 
 ### POST `/user/verify-email`
 Verify user email address using verification token.
@@ -299,7 +299,7 @@ Resend email verification link.
 
 ---
 
-## 🔄 Password Reset Endpoints
+## Password Reset Endpoints
 
 ### POST `/user/password-reset/request`
 Request password reset email.
@@ -357,9 +357,9 @@ Reset password using reset token.
 
 ---
 
-## 🤖 AI-Powered Authentication Endpoints
+## AI-Powered Authentication Endpoints
 
-### POST `/auth/analyze-password` 🧠
+### POST `/auth/analyze-password`
 AI-powered password security analysis using deep learning models.
 
 **Request Body:**
@@ -403,7 +403,7 @@ AI-powered password security analysis using deep learning models.
 
 ---
 
-### POST `/auth/adaptive-login` ⚡
+### POST `/auth/adaptive-login`
 AI-driven adaptive authentication with real-time risk assessment.
 
 **Request Body:**
@@ -471,7 +471,7 @@ AI-driven adaptive authentication with real-time risk assessment.
 
 ---
 
-### GET `/ai/health` 🏥
+### GET `/ai/health`
 Check AI/ML model availability and performance.
 
 **Response (200):**
@@ -510,21 +510,25 @@ Check AI/ML model availability and performance.
 
 ---
 
-## 🔗 OAuth2 Authorization Endpoints
+## OAuth 2.1 PKCE Authorization Endpoints
 
-### GET `/oauth/authorize`
-OAuth2 authorization endpoint for authorization code flow.
+The legacy `/oauth/authorize` and `/oauth/token` authorization-code endpoints return HTTP 410. New integrations must use PKCE with the S256 challenge method.
+
+### GET `/oauth2/pkce/authorize`
+OAuth 2.1 authorization endpoint for browser redirects. The redirect URI must exactly match an active client's registered URI.
 
 **Query Parameters:**
 - `response_type`: `code` (required)
 - `client_id`: OAuth2 client identifier (required)
 - `redirect_uri`: Client redirect URI (required)
-- `scope`: Requested scopes (optional, default: "read profile email")
-- `state`: Security state parameter (recommended)
+- `scope`: Requested scopes (optional, default: "read write")
+- `state`: Cryptographically random CSRF state, 16–512 characters (required)
+- `code_challenge`: 43-character base64url SHA-256 challenge (required)
+- `code_challenge_method`: `S256` (required; `plain` is not accepted)
 
 **Example:**
 ```bash
-GET /oauth/authorize?response_type=code&client_id=oauth2-client&redirect_uri=http://localhost:3000/callback&scope=read%20profile%20email&state=random123
+GET /oauth2/pkce/authorize?response_type=code&client_id=oauth2-client&redirect_uri=http://localhost:3000/callback&scope=read%20profile%20email&state=random-state-value&code_challenge=base64url-sha256-challenge-value-123456789&code_challenge_method=S256
 ```
 
 **Response:**
@@ -533,27 +537,31 @@ GET /oauth/authorize?response_type=code&client_id=oauth2-client&redirect_uri=htt
 
 **Success Redirect:**
 ```
-http://localhost:3000/callback?code=auth-code-here&state=random123
+http://localhost:3000/callback?code=auth-code-here&state=random-state-value
 ```
 
 **Error Redirect:**
 ```
-http://localhost:3000/callback?error=invalid_request&error_description=Missing%20client_id&state=random123
+http://localhost:3000/callback?error=invalid_request&error_description=A%20valid%20S256%20challenge%20and%20state%20are%20required&state=random-state-value
 ```
 
 ---
 
-### POST `/oauth/token`
-Exchange authorization code for access token.
+### POST `/oauth2/pkce/token`
+Atomically exchange a one-time authorization code and its original verifier for tokens.
 
-**Request Body (application/x-www-form-urlencoded):**
+**Request Body (application/json):**
+```json
+{
+  "grant_type": "authorization_code",
+  "code": "auth-code-here",
+  "client_id": "oauth2-client",
+  "redirect_uri": "http://localhost:3000/callback",
+  "code_verifier": "original-pkce-code-verifier"
+}
 ```
-grant_type=authorization_code
-code=auth-code-here
-client_id=oauth2-client
-client_secret=oauth2-client-secret
-redirect_uri=http://localhost:3000/callback
-```
+
+Confidential clients must also provide `client_secret`. Public clients must not provide one. Token responses include `Cache-Control: no-store` and `Pragma: no-cache`.
 
 **Response (200):**
 ```json
@@ -566,9 +574,7 @@ redirect_uri=http://localhost:3000/callback
 }
 ```
 
-**Temporal Activities:** 
-- `exchange_authorization_code` - Validates code and generates tokens
-- `store_access_token` - Persists token information
+Authorization codes are stored as SHA-256 digests and consumed with a conditional database update. Sensitive grants and tokens are not written to Temporal workflow history.
 
 ---
 
@@ -613,7 +619,7 @@ Get user information using OAuth2 access token.
 
 ---
 
-## 🏥 Health & Status Endpoints
+## Health & Status Endpoints
 
 ### GET `/health`
 System health check endpoint.
@@ -651,7 +657,7 @@ Root endpoint with service information.
 
 ---
 
-## 📊 Response Status Codes
+## Response Status Codes
 
 | Code | Description | Usage |
 |------|-------------|--------|
@@ -667,7 +673,7 @@ Root endpoint with service information.
 
 ---
 
-## 🔒 Security Headers
+## Security Headers
 
 All API responses include security headers:
 
@@ -682,7 +688,7 @@ Referrer-Policy: strict-origin-when-cross-origin
 
 ---
 
-## 🧪 Testing the API
+## Testing the API
 
 ### Using curl
 
@@ -776,37 +782,37 @@ const profile = await profileResponse.json();
 
 ---
 
-## 📋 Interactive API Documentation
+## Interactive API Documentation
 
 Visit **http://localhost:8000/docs** for the complete interactive API documentation powered by **Swagger UI**. The interactive docs allow you to:
 
-- 🔍 **Explore all endpoints** with detailed descriptions
-- 🧪 **Test API calls** directly in the browser
-- 📝 **View request/response schemas** with examples
-- 🔐 **Authenticate** and test protected endpoints
-- 📊 **See response codes** and error handling
-- 📱 **Download OpenAPI spec** for client generation
+- **Explore all endpoints** with detailed descriptions
+- **Test API calls** directly in the browser
+- **View request/response schemas** with examples
+- **Authenticate** and test protected endpoints
+- **See response codes** and error handling
+- **Download OpenAPI spec** for client generation
 
 The OpenAPI specification is available at: **http://localhost:8000/openapi.json**
 
 ---
 
-## 🌊 AI-Enhanced Temporal Workflow Integration
+## AI-Enhanced Temporal Workflow Integration
 
 Every authentication operation in this API is powered by **AI-enhanced Temporal workflows**, providing:
 
-- **🤖 AI-Powered Reliability**: ML operations survive server failures and retry intelligently
-- **🧠 Smart Automation**: AI decisions guide workflow execution with compensation patterns
-- **📊 AI Observability**: Monitor both workflows and AI models at http://localhost:8081
-- **🔍 ML Debugging**: Step-by-step AI decision history with confidence scores
-- **⚡ Adaptive Durability**: Long-running authentication sessions with real-time risk updates
+- **AI-Powered Reliability**: ML operations survive server failures and retry intelligently
+- **Smart Automation**: AI decisions guide workflow execution with compensation patterns
+- **AI Observability**: Monitor both workflows and AI models at http://localhost:8081
+- **ML Debugging**: Step-by-step AI decision history with confidence scores
+- **Adaptive Durability**: Long-running authentication sessions with real-time risk updates
 
 ### AI Workflow Features
 
-- **🎯 Search Attributes**: Query workflows by AI metrics (`UserRiskScore > 0.7`)
-- **📡 Real-time Signals**: AI risk updates trigger workflow adjustments
-- **🔄 Saga Patterns**: AI operations with automatic compensation on failure
-- **👶 Child Workflows**: Complex AI flows broken into manageable components
+- **Search Attributes**: Query workflows by AI metrics (`UserRiskScore > 0.7`)
+- **Real-time Signals**: AI risk updates trigger workflow adjustments
+- **Saga Patterns**: AI operations with automatic compensation on failure
+- **Child Workflows**: Complex AI flows broken into manageable components
 
 ### Monitoring AI Workflows
 

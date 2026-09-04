@@ -1,22 +1,22 @@
-# 🤖 AI-Powered Authentication Features
+# FlowShield Authentication Features
 
-## 🎯 Revolutionary Overview
+## Current Overview
 
-This is the **world's first AI-enhanced OAuth2 authentication system** built on **Temporal.io workflows**. It combines cutting-edge machine learning with enterprise-grade workflow orchestration to deliver intelligent, adaptive, and bulletproof authentication security.
+FlowShield combines OAuth 2.1/OIDC, strong authentication, IAM, explainable risk decisions, and durable Temporal identity operations. The default stack remains deterministic: optional Ollama analysis runs in shadow mode and cannot override the authoritative risk policy. The larger Python ML stack is an experimental profile, not part of the default deployment.
 
-**🌟 What Makes This Revolutionary:**
-- **AI-First Security**: Real-time fraud detection with 95%+ accuracy
-- **Behavioral Intelligence**: Deep learning analysis of user patterns
-- **Adaptive Authentication**: ML-driven dynamic security requirements
-- **Distributed Sagas**: Enterprise transaction patterns with compensation
-- **Production-Ready AI**: Graceful fallbacks and comprehensive testing
+**What Makes This Revolutionary:**
+- **Explainable Security**: Versioned risk policies with reason codes and contribution scores
+- **Strong Authentication**: Passkeys, TOTP, recovery codes, and rotating sessions
+- **Durable Identity Operations**: Human approval, expiry timers, and revocation through Temporal
+- **Safe Experimentation**: Bounded local simulations with deterministic evidence
+- **Optional AI**: Non-enforcing Ollama shadow analysis with graceful fallback
 
-## 🚀 Latest Features Added
+## Latest Features Added
 
-### 🛡️ **Admin Fraud Observability Dashboard** 
+### **Admin Fraud Observability Dashboard**
 *(NEW - Comprehensive fraud detection monitoring)*
 
-**🔍 Real-time Fraud Analytics:**
+**Real-time Fraud Analytics:**
 - **Live fraud event monitoring** with AI-powered risk scoring
 - **Interactive analytics dashboard** with React components
 - **Temporal-powered data aggregation** for reliability
@@ -24,50 +24,50 @@ This is the **world's first AI-enhanced OAuth2 authentication system** built on 
 - **Top risk factors analysis** with actionable insights
 - **High-risk event alerting** with email masking for privacy
 
-**📊 AI Model Performance Monitoring:**
+**AI Model Performance Monitoring:**
 - **Ollama AI model health** and response time tracking
 - **Fallback provider metrics** when primary AI is unavailable
 - **Success rate monitoring** across all AI requests
 - **Performance benchmarking** with millisecond precision
 
-**🔄 Temporal-Powered Analytics:**
+**Temporal-Powered Analytics:**
 - **Durable data processing** - never lose analytics data
 - **Child workflow orchestration** for complex aggregations  
 - **Search attributes** for easy workflow discovery
 - **Continue-as-new pattern** for long-running analytics
 
-### 📧 **Temporal-Powered Email System**
+### **Temporal-Powered Email System**
 *(NEW - Enterprise-grade email delivery with AI personalization)*
 
-**⚡ Intelligent Email Workflows:**
+**Intelligent Email Workflows:**
 - **Temporal email workflows** with retry logic and fallback strategies
-- **AI-personalized content** using Ollama for email optimization
-- **Multi-provider fallback** (SMTP → Console → Log verification links)
+- **Optional AI-assisted content analysis** using Ollama
+- **Local Mailpit and SMTP delivery** without logging secret-bearing verification links
 - **Rate limiting and security** checks for password reset emails
 - **Delivery tracking** and analytics integration
 
-**🎨 Beautiful Email Templates:**
+**Beautiful Email Templates:**
 - **HTML email templates** with gradient backgrounds and modern design
 - **Security-focused layouts** for password reset notifications
 - **Responsive design** that works across all email clients
 - **Brand consistency** with OAuth2 Auth Service styling
 
-**🔒 Security Features:**
+**Security Features:**
 - **Rate limiting** for password reset attempts (per email & IP)
 - **IP address tracking** in password reset notifications
 - **Fraud detection integration** - AI validates email requests
 - **Audit trail** for all email delivery attempts
 
-**🚨 Graceful Fallbacks:**
+**Graceful Fallbacks:**
 ```bash
 # SMTP configured → Beautiful HTML emails delivered
 # SMTP unavailable → Console delivery with formatting  
-# All providers down → Verification links logged for manual access
+# Delivery failures remain observable without exposing verification secrets
 ```
 
-## 🎯 Quick Usage Guide for New Features
+## Quick Usage Guide for New Features
 
-### 📊 **Access Admin Dashboard**
+### **Access Admin Dashboard**
 ```bash
 # 1. Start the system
 docker-compose -f docker-compose.ai.yml up -d
@@ -84,7 +84,7 @@ curl -X POST "http://localhost:8000/user/register" \
 open http://localhost:8081  # Temporal UI shows email & analytics workflows
 ```
 
-### 📧 **Email System in Action**
+### **Email System in Action**
 ```bash
 # Registration with email workflow
 curl -X POST "http://localhost:8000/user/register" \
@@ -100,7 +100,7 @@ export SMTP_PASSWORD="your-smtp-password"
 # Restart backend to pick up SMTP settings
 ```
 
-### 🤖 **AI Features & Analytics**
+### **AI Features & Analytics**
 ```bash
 # Test AI fraud detection
 curl -X POST "http://localhost:8000/ai/test-fraud-detection" \
@@ -117,22 +117,22 @@ curl -X POST "http://localhost:8000/admin/fraud-events/simulate?count=10"
 curl "http://localhost:8000/admin/fraud-events/realtime?limit=5"
 ```
 
-### 🔍 **Temporal Workflow Monitoring**
+### **Temporal Workflow Monitoring**
 - **Analytics Workflows**: Search for `FraudAnalyticsWorkflow` in Temporal UI
 - **Email Workflows**: Search for `EmailVerificationWorkflow` or `PasswordResetEmailWorkflow`
 - **Search Attributes**: Filter by `recipient`, `email_type`, or `correlation_id`
 - **Metrics**: View processing times and retry attempts in workflow history
 
-## 🤖 AI-Enhanced Core Features
+## AI-Enhanced Core Features
 
-### 1. 🧠 **AI-Powered User Registration**
+### 1. **AI-Powered User Registration**
 
 #### **Intelligent Registration Flow**
-- **🤖 Real-time Fraud Detection**: XGBoost ensemble models with 95%+ accuracy
-- **🔍 Email Intelligence**: Transformer-based analysis of email patterns and domains
-- **⚡ Behavioral Analysis**: Machine learning analysis of form interaction patterns
-- **🛡️ Adaptive Security**: Dynamic verification requirements based on ML risk scoring
-- **📊 Full AI Observability**: Risk scores, confidence levels, and AI insights in Temporal UI
+- **Real-time Risk Decisions**: Deterministic policy evaluation with auditable reason codes
+- **Optional AI Shadow**: Ollama analysis is recorded for comparison but is non-enforcing
+- **Behavioral Signals**: Request, device, and session context can contribute to policy decisions
+- **Adaptive Security**: Policy outcomes support allow, challenge, review, and deny
+- **Decision Observability**: Policy version, checksum, contributions, and shadow output are retained
 
 **AI-Enhanced Technical Implementation:**
 ```python
@@ -211,21 +211,19 @@ class UserRegistrationWorkflowV2:
 ```
 
 **AI-Enhanced Features:**
-- 🤖 **ML Fraud Detection**: XGBoost models with feature engineering
-- 🧬 **Anomaly Detection**: Isolation Forest and LOF for outlier identification  
-- 📧 **Email Intelligence**: NLP analysis of email domains and patterns
-- ⚡ **Real-time Scoring**: Sub-100ms fraud decisions with confidence scores
-- 🔄 **Online Learning**: Models update with new registration patterns
-- 📊 **AI Observability**: Full ML metrics in Temporal search attributes
+- **Authoritative Policy**: Deterministic scoring suitable for testing and audit
+- **Reasoned Outcomes**: Individual signal contributions explain each decision
+- **Optional Experiments**: Historical XGBoost, Isolation Forest, NLP, and deep-learning modules require the separate AI dependency profile and model validation
+- **AI Observability**: Shadow-model results can be compared without changing access decisions
 
-### 2. 🧠 **AI-Optimized Email Verification**
+### 2. **AI-Optimized Email Verification**
 
 #### **Intelligent Email Verification Flow**
-- **🤖 AI-Optimized Delivery**: ML-predicted optimal send times and personalization
-- **🧬 Smart Templates**: GenAI-generated personalized email content based on user profile
-- **⚡ Adaptive Timing**: Time series ML models predict best delivery windows
-- **🛡️ Spam Optimization**: AI-powered content optimization for deliverability
-- **📊 Behavioral Analysis**: ML analysis of verification speed and engagement patterns
+- **AI-Optimized Delivery**: ML-predicted optimal send times and personalization
+- **Smart Templates**: GenAI-generated personalized email content based on user profile
+- **Adaptive Timing**: Time series ML models predict best delivery windows
+- **Spam Optimization**: AI-powered content optimization for deliverability
+- **Behavioral Analysis**: ML analysis of verification speed and engagement patterns
 
 **AI-Enhanced Email Implementation:**
 ```python
@@ -271,35 +269,34 @@ async def ai_intelligent_email_optimization(email_data: Dict[str, Any]) -> Dict[
     }
 ```
 
-### 3. 🧬 **AI-Powered Behavioral Authentication**
+### 3. **AI-Powered Behavioral Authentication**
 
 #### **Intelligent Authentication System**
-- **🧠 Behavioral Biometrics**: LSTM neural networks analyze typing patterns and interaction behavior
-- **⚡ Adaptive Authentication**: ML-driven dynamic security requirements based on real-time risk assessment
-- **🛡️ Account Takeover Detection**: Advanced anomaly detection with graph neural networks
-- **📊 Continuous Authentication**: Real-time behavioral monitoring with drift detection
-- **🔄 Smart Session Management**: AI-optimized token lifetimes based on user behavior patterns
+- **Behavioral Analytics Framework**: Captures interaction, location, device, and session signals
+- **Adaptive Authentication**: Deterministic risk outcomes can require stronger authentication or review
+- **Session Protection**: Opaque refresh-token rotation and reuse detection limit token theft
+- **Optional ML Research**: LSTM and anomaly-detection experiments require the separate AI dependency profile and are not enabled by default
 
-### 4. 🔒 **AI-Enhanced Password Security**
+### 4. **AI-Enhanced Password Security**
 
 #### **Intelligent Password Analysis**
-- **🤖 Deep Learning Analysis**: Neural networks analyze password entropy and patterns beyond traditional rules
-- **🧠 NLP Personal Info Detection**: Spacy and NLTK detect personal information correlation
-- **🔍 Semantic Similarity**: Sentence transformers compare against breach databases
-- **⚡ Transformer Pattern Analysis**: BERT-based detection of predictable patterns
-- **💬 GenAI Explanations**: Claude/GPT-powered personalized security recommendations
+- **Deep Learning Analysis**: Neural networks analyze password entropy and patterns beyond traditional rules
+- **NLP Personal Info Detection**: Spacy and NLTK detect personal information correlation
+- **Semantic Similarity**: Sentence transformers compare against breach databases
+- **Transformer Pattern Analysis**: BERT-based detection of predictable patterns
+- **GenAI Explanations**: Claude/GPT-powered personalized security recommendations
 
-### 5. ⚡ **Advanced Temporal Saga Patterns**
+### 5. **Advanced Temporal Saga Patterns**
 
 #### **Production-Ready Distributed Authentication Saga**
-- **🔄 Saga Pattern**: Distributed transactions across multiple services with automatic compensation
-- **👶 Child Workflows**: Complex auth flows broken into manageable, reusable components
-- **📡 Signals & Updates**: Real-time authentication decision adjustments via Temporal signals
-- **🔄 Continue-as-New**: Long-running session monitoring without workflow history bloat
-- **📝 Workflow Versioning**: Production deployment strategies for live system updates
-- **🎯 Search Attributes**: Advanced observability and workflow querying with AI metrics
+- **Saga Pattern**: Distributed transactions across multiple services with automatic compensation
+- **Child Workflows**: Complex auth flows broken into manageable, reusable components
+- **Signals & Updates**: Real-time authentication decision adjustments via Temporal signals
+- **Continue-as-New**: Long-running session monitoring without workflow history bloat
+- **Workflow Versioning**: Production deployment strategies for live system updates
+- **Search Attributes**: Advanced observability and workflow querying with AI metrics
 
-## 🧠 AI + Temporal Integration Deep Dive
+## AI + Temporal Integration Deep Dive
 
 ### **Why AI + Temporal is Perfect for Authentication?**
 
@@ -311,43 +308,45 @@ Traditional authentication systems fail at:
 - **Siloed Operations**: No coordination between security components
 
 **AI + Temporal solves everything:**
-- 🤖 **Intelligent Security**: ML models adapt to new threats in real-time
-- ⚡ **Durable AI Operations**: ML operations are fault-tolerant and resumable
-- 📊 **Full AI Observability**: Every ML decision is logged and traceable in Temporal UI
-- 🔄 **Automatic AI Retries**: Failed ML operations retry with intelligent backoff
-- 🧠 **Adaptive Workflows**: Security requirements adjust based on AI insights
-- 🛡️ **Compensation Patterns**: Failed AI operations trigger automatic rollbacks
-- 📈 **Continuous Learning**: Models improve with each authentication attempt
+- **Intelligent Security**: ML models adapt to new threats in real-time
+- **Durable AI Operations**: ML operations are fault-tolerant and resumable
+- **Full AI Observability**: Every ML decision is logged and traceable in Temporal UI
+- **Automatic AI Retries**: Failed ML operations retry with intelligent backoff
+- **Adaptive Workflows**: Security requirements adjust based on AI insights
+- **Compensation Patterns**: Failed AI operations trigger automatic rollbacks
+- **Continuous Learning**: Models improve with each authentication attempt
 
-## 🛠 **AI/ML Tech Stack**
+## **AI/ML Tech Stack**
 
-### **Machine Learning Libraries**
-- **🧠 Core ML**: Scikit-learn, XGBoost, LightGBM for ensemble fraud detection
-- **🤖 Deep Learning**: TensorFlow/Keras for behavioral analysis and LSTM networks  
-- **🔍 Anomaly Detection**: PyOD (Isolation Forest, LOF, ABOD) for real-time outlier detection
-- **📊 Feature Engineering**: Feature-engine, category-encoders for advanced preprocessing
-- **⚖️ Imbalanced Learning**: Imbalanced-learn for handling fraud dataset imbalances
+### **Optional Machine Learning Libraries**
+
+The libraries below belong to `requirements-ai.txt` / `requirements-comprehensive.txt`. They are not installed or enabled by the default Compose stack, and no accuracy claim is made without a versioned dataset and evaluation report.
+- **Core ML**: Scikit-learn, XGBoost, LightGBM for ensemble fraud detection
+- **Deep Learning**: TensorFlow/Keras for behavioral analysis and LSTM networks
+- **Anomaly Detection**: PyOD (Isolation Forest, LOF, ABOD) for real-time outlier detection
+- **Feature Engineering**: Feature-engine, category-encoders for advanced preprocessing
+- **Imbalanced Learning**: Imbalanced-learn for handling fraud dataset imbalances
 
 ### **NLP & Generative AI**
-- **🌍 Transformers**: Hugging Face transformers for pattern analysis and classification
-- **📝 Sentence Embeddings**: Sentence-transformers for semantic similarity analysis
-- **🎯 NLP Processing**: Spacy, NLTK, TextBlob for personal information detection
-- **🤖 GenAI Integration**: OpenAI GPT and Anthropic Claude for intelligent explanations
-- **📧 Content Generation**: AI-powered personalized email content and recommendations
+- **Transformers**: Hugging Face transformers for pattern analysis and classification
+- **Sentence Embeddings**: Sentence-transformers for semantic similarity analysis
+- **NLP Processing**: Spacy, NLTK, TextBlob for personal information detection
+- **GenAI Integration**: OpenAI GPT and Anthropic Claude for intelligent explanations
+- **Content Generation**: AI-powered personalized email content and recommendations
 
 ### **Infrastructure & Performance**
-- **⚡ Caching**: Redis for ML model caching and real-time feature storage
-- **🔧 Model Management**: Joblib for model serialization and versioning
-- **📊 Visualization**: Matplotlib, Seaborn, Plotly for ML model debugging and insights
+- **Caching**: Redis for ML model caching and real-time feature storage
+- **Model Management**: Joblib for model serialization and versioning
+- **Visualization**: Matplotlib, Seaborn, Plotly for ML model debugging and insights
 
-## 🧪 **Comprehensive AI Testing Framework**
+## **Comprehensive AI Testing Framework**
 
 ### **Advanced Temporal + AI Testing**
-- **🔄 AI Replay Testing**: Ensures ML workflow determinism across model versions
-- **⏰ Time Manipulation**: Test timeout scenarios with AI model latency simulation  
-- **🎭 Activity Mocking**: Isolated workflow testing with AI activity stubs and model mocks
-- **📊 Performance Testing**: Concurrent AI workflow execution benchmarks
-- **🔌 Integration Testing**: Real Temporal server + AI model connectivity verification
+- **AI Replay Testing**: Ensures ML workflow determinism across model versions
+- **Time Manipulation**: Test timeout scenarios with AI model latency simulation
+- **Activity Mocking**: Isolated workflow testing with AI activity stubs and model mocks
+- **Performance Testing**: Concurrent AI workflow execution benchmarks
+- **Integration Testing**: Real Temporal server + AI model connectivity verification
 
 ### **AI-Specific Testing Patterns**
 ```python
@@ -396,43 +395,43 @@ async def test_ai_workflow_with_model_fallback():
     assert result.get("ai_available") is False
 ```
 
-## 🚀 **AI-Enhanced Production Considerations**
+## **AI-Enhanced Production Considerations**
 
 ### **AI-Ready Scalability**
-- **🤖 ML Model Scaling**: Multiple AI worker instances with GPU acceleration
-- **⚡ Model Caching**: Redis-based ML model caching for sub-100ms responses
-- **🧠 Distributed AI**: AI operations scale across worker nodes with load balancing
-- **📊 Feature Store**: Real-time feature storage and retrieval for ML models
-- **🔄 Online Learning**: Continuous model updates with streaming data integration
-- **🛡️ A/B Testing**: ML model deployment with gradual rollout and performance monitoring
+- **ML Model Scaling**: Multiple AI worker instances with GPU acceleration
+- **Model Caching**: Redis-based ML model caching for sub-100ms responses
+- **Distributed AI**: AI operations scale across worker nodes with load balancing
+- **Feature Store**: Real-time feature storage and retrieval for ML models
+- **Online Learning**: Continuous model updates with streaming data integration
+- **A/B Testing**: ML model deployment with gradual rollout and performance monitoring
 
 ### **AI-Enhanced Security Hardening**
-- **🤖 AI Model Security**: Encrypted ML model storage and secure model serving
-- **🛡️ Adversarial Detection**: AI models protected against adversarial attacks
-- **🔒 Federated Learning**: Privacy-preserving ML with differential privacy
-- **📊 AI Audit Trails**: Complete ML decision audit logs with model explainability
-- **⚡ Real-time Threat Detection**: AI-powered anomaly detection for security threats
-- **🧠 Behavioral Baselines**: ML models establish normal behavior patterns for each user
+- **AI Model Security**: Encrypted ML model storage and secure model serving
+- **Adversarial Detection**: AI models protected against adversarial attacks
+- **Federated Learning**: Privacy-preserving ML with differential privacy
+- **AI Audit Trails**: Complete ML decision audit logs with model explainability
+- **Real-time Threat Detection**: AI-powered anomaly detection for security threats
+- **Behavioral Baselines**: ML models establish normal behavior patterns for each user
 
-## 💡 **Revolutionary Learning Opportunities**
+## **Revolutionary Learning Opportunities**
 
 This project is **the world's first comprehensive example** of:
-- **🤖 AI-Powered Authentication**: Real-world ML integration in auth systems
-- **🌊 AI + Temporal Patterns**: How to combine ML with workflow orchestration
-- **🧠 Production AI Deployment**: Scalable ML model serving with graceful fallbacks
-- **⚡ Advanced Temporal Features**: Saga patterns, child workflows, signals, and continue-as-new
-- **🛡️ Intelligent Security**: Beyond traditional rule-based authentication
-- **📊 AI Observability**: Monitoring and debugging ML-powered systems
-- **🔄 Distributed AI Transactions**: Saga patterns with ML operations
-- **📈 Continuous AI Learning**: Online model updates and A/B testing
+- **AI-Powered Authentication**: Real-world ML integration in auth systems
+- **AI + Temporal Patterns**: How to combine ML with workflow orchestration
+- **Production AI Deployment**: Scalable ML model serving with graceful fallbacks
+- **Advanced Temporal Features**: Saga patterns, child workflows, signals, and continue-as-new
+- **Intelligent Security**: Beyond traditional rule-based authentication
+- **AI Observability**: Monitoring and debugging ML-powered systems
+- **Distributed AI Transactions**: Saga patterns with ML operations
+- **Continuous AI Learning**: Online model updates and A/B testing
 
 ### **Unique Learning Value**
-- **🥇 FIRST OF ITS KIND**: Nobody else is doing AI + Temporal for authentication
-- **🏭 Production-Ready**: Real ML models with proper error handling and testing
-- **🎯 Best Practices**: Demonstrates enterprise patterns for AI integration
-- **📚 Comprehensive Documentation**: Every AI/ML decision explained and documented
-- **🧪 Testing Strategies**: Advanced testing patterns for AI workflows
-- **🚀 Future-Proof Architecture**: Templates for the next generation of intelligent systems
+- **FIRST OF ITS KIND**: Nobody else is doing AI + Temporal for authentication
+- **Production-Ready**: Real ML models with proper error handling and testing
+- **Best Practices**: Demonstrates enterprise patterns for AI integration
+- **Comprehensive Documentation**: Every AI/ML decision explained and documented
+- **Testing Strategies**: Advanced testing patterns for AI workflows
+- **Future-Proof Architecture**: Templates for the next generation of intelligent systems
 
 This project **revolutionizes authentication** and provides a blueprint for integrating AI into any Temporal-based system. It's not just a demo - it's **the future of intelligent, reliable software systems**.
 

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { FiMonitor, FiShield, FiUsers, FiCpu, FiSearch, FiBarChart2, FiTarget } from 'react-icons/fi';
+import { Monitor as FiMonitor, Shield as FiShield, Users as FiUsers, Cpu as FiCpu, Search as FiSearch, BarChart2 as FiBarChart2, Target as FiTarget } from 'lucide-react';
 import RiskDistributionChart from '../charts/RiskDistributionChart';
 import RiskFactorsChart from '../charts/RiskFactorsChart';
 

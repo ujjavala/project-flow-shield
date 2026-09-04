@@ -2,6 +2,8 @@
 Pytest configuration and fixtures for Temporal PKCE tests
 Special test environment setup for Temporal workflows
 """
+from __future__ import annotations
+
 import pytest
 import asyncio
 import os

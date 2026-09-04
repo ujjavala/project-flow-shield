@@ -1,10 +1,10 @@
-# 🔐 IAM Features Documentation
+# IAM Features Documentation
 
 ## Overview
 
 FlowShield's Identity and Access Management (IAM) system provides enterprise-grade role-based access control with scope-aware permissions, Temporal workflow integration, and comprehensive audit logging.
 
-## 🎯 Key Features
+## Key Features
 
 ### 1. Role-Based Access Control (RBAC)
 - **Hierarchical Roles**: Super Admin → Admin → Manager → Moderator → Analyst → User → Guest
@@ -36,7 +36,7 @@ FlowShield's Identity and Access Management (IAM) system provides enterprise-gra
 - **Real-time Monitoring**: Live tracking of permission changes and access patterns
 - **Forensic Analysis**: Detailed investigation capabilities for security incidents
 
-## 📊 IAM Data Model
+## IAM Data Model
 
 ### Core Entities
 
@@ -84,7 +84,7 @@ FlowShield's Identity and Access Management (IAM) system provides enterprise-gra
 - **user_scopes**: Users ↔ Scopes for context
 - **role_scope_assignments**: Role-Scope combinations per user
 
-## 🔄 Temporal Workflows
+## Temporal Workflows
 
 ### Role Assignment Workflow
 ```python
@@ -129,7 +129,7 @@ class IAMAccessReviewWorkflow:
         # 6. Send notifications
 ```
 
-## 🛡️ Permission Decorators
+## Permission Decorators
 
 ### Basic Permission Checking
 ```python
@@ -173,7 +173,7 @@ async def management_function(iam_context: IAMContext = Depends(get_iam_context)
     pass
 ```
 
-## 🎛️ IAM Management API
+## IAM Management API
 
 ### Role Management
 ```bash
@@ -238,7 +238,7 @@ POST /iam/check-permission?user_id={user_id}&permission_name=user.read&resource_
 GET /iam/audit/roles?start_date=2024-01-01&end_date=2024-12-31&action=role_assigned
 ```
 
-## 🏗️ Bootstrap System
+## Bootstrap System
 
 The IAM system includes a comprehensive bootstrap script that creates:
 
@@ -269,7 +269,7 @@ The IAM system includes a comprehensive bootstrap script that creates:
 - Realistic organizational structure
 - Pre-configured scope assignments
 
-## 🔄 Integration Guide
+## Integration Guide
 
 ### Step 1: Bootstrap IAM System
 ```bash
@@ -311,7 +311,7 @@ const hasPermission = (permission) => {
 {hasPermission('user.create') && <CreateUserButton />}
 ```
 
-## 📈 Performance Considerations
+## Performance Considerations
 
 ### Caching Strategy
 - **Permission Evaluation Cache**: 5-minute TTL for permission checks
@@ -328,7 +328,7 @@ const hasPermission = (permission) => {
 - **Partitioning**: Audit logs partitioned by date
 - **Archival**: Old audit data archived to reduce query load
 
-## 🔒 Security Best Practices
+## Security Best Practices
 
 ### Principle of Least Privilege
 - Users granted minimum required permissions
@@ -345,7 +345,7 @@ const hasPermission = (permission) => {
 - Super admin actions logged and monitored
 - Critical operations require multiple approvals
 
-## 🚀 Future Enhancements
+## Future Enhancements
 
 ### Planned Features
 1. **Dynamic Policies** - JSON-based policy engine for complex rules
@@ -362,7 +362,7 @@ const hasPermission = (permission) => {
 3. **ML-Based Access Patterns** - Anomaly detection in access patterns
 4. **Zero Trust Architecture** - Continuous verification of access decisions
 
-## 📋 Migration Guide
+## Migration Guide
 
 ### From Legacy System
 1. **Assess Current Roles** - Map existing roles to new IAM model

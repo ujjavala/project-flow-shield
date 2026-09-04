@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, Boolean, DateTime, Text, Integer
+from sqlalchemy import Column, String, Boolean, DateTime, Text, Integer, ForeignKey
 from sqlalchemy.orm import relationship
 from app.database.base import Base
 from sqlalchemy.sql import func
@@ -35,6 +35,11 @@ class User(Base):
     # Password reset
     password_reset_token = Column(String(255), nullable=True)
     password_reset_expires = Column(DateTime(timezone=True), nullable=True)
+
+    # MFA secrets are encrypted with the deployment MFA encryption key.
+    totp_secret_encrypted = Column(Text, nullable=True)
+    totp_pending_secret_encrypted = Column(Text, nullable=True)
+    totp_enabled = Column(Boolean, nullable=False, default=False)
     
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())
@@ -125,10 +130,16 @@ class RefreshToken(Base):
     
     id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
     user_id = Column(String, nullable=False, index=True)
-    token = Column(String(255), unique=True, nullable=False)
+    token_hash = Column(String(64), unique=True, nullable=False, index=True)
+    family_id = Column(String, nullable=False, index=True, default=lambda: str(uuid.uuid4()))
+    session_id = Column(String, ForeignKey("auth_sessions.id", ondelete="CASCADE"), nullable=False, index=True)
+    parent_id = Column(String, nullable=True)
+    replaced_by_id = Column(String, nullable=True)
     expires_at = Column(DateTime(timezone=True), nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     is_revoked = Column(Boolean, default=False)
+    used_at = Column(DateTime(timezone=True), nullable=True)
+    revoked_at = Column(DateTime(timezone=True), nullable=True)
     
     def __repr__(self):
         return f"<RefreshToken(id={self.id}, user_id={self.user_id})>"

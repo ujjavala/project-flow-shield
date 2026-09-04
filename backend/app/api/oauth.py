@@ -45,7 +45,13 @@ async def authorize(
     state: Optional[str] = Query(None),
     db: AsyncSession = Depends(get_db)
 ):
-    """OAuth2 authorization endpoint"""
+    """Retired non-PKCE authorization endpoint."""
+    raise HTTPException(
+        status_code=status.HTTP_410_GONE,
+        detail="Use /oauth2/pkce/authorize with an S256 code challenge"
+    )
+
+    # Legacy implementation retained temporarily for migration reference.
     try:
         # Validate response_type
         if response_type != "code":
@@ -120,7 +126,13 @@ async def authorize_post(
     password: str = Form(...),
     db: AsyncSession = Depends(get_db)
 ):
-    """Handle OAuth2 authorization with user credentials"""
+    """Retired resource-owner credential authorization endpoint."""
+    raise HTTPException(
+        status_code=status.HTTP_410_GONE,
+        detail="Use /oauth2/pkce/authorize with an S256 code challenge"
+    )
+
+    # Legacy implementation retained temporarily for migration reference.
     try:
         # Validate client
         result = await db.execute(
@@ -218,7 +230,13 @@ async def token(
     redirect_uri: str = Form(...),
     db: AsyncSession = Depends(get_db)
 ):
-    """OAuth2 token endpoint"""
+    """Retired non-PKCE token endpoint."""
+    raise HTTPException(
+        status_code=status.HTTP_410_GONE,
+        detail="Use /oauth2/pkce/token with the original code verifier"
+    )
+
+    # Legacy implementation retained temporarily for migration reference.
     try:
         # Validate grant_type
         if grant_type != "authorization_code":

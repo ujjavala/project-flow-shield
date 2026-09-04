@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Link, useSearchParams, useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
-import { FiEye, FiEyeOff } from 'react-icons/fi';
+import { Eye as FiEye, EyeOff as FiEyeOff } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 const ResetPassword = () => {

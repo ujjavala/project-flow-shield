@@ -15,6 +15,11 @@ from datetime import timedelta, datetime
 from unittest.mock import Mock, AsyncMock
 from typing import Dict, Any
 
+# This legacy suite exercises the optional heavyweight ML profile. The default
+# local and CI installation intentionally uses the deterministic/Ollama path.
+for dependency in ("numpy", "pandas", "sklearn", "tensorflow"):
+    pytest.importorskip(dependency, reason="Install requirements-ai.txt to run legacy ML workflow tests")
+
 # Temporal testing imports
 from temporalio.testing import WorkflowEnvironment, ActivityEnvironment
 from temporalio.worker import Worker

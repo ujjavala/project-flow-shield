@@ -62,7 +62,11 @@ MOCK_USERS = [
 ]
 
 # Create API router
-router = APIRouter(prefix="/admin", tags=["Admin Dashboard"])
+router = APIRouter(
+    prefix="/admin",
+    tags=["Admin Dashboard"],
+    dependencies=[Depends(get_admin_user)],
+)
 
 # Response Models
 class SystemHealthResponse(BaseModel):

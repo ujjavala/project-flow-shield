@@ -13,6 +13,9 @@ CREATE TABLE IF NOT EXISTS  users (
     email_verification_expires TIMESTAMP,
     password_reset_token VARCHAR(255),
     password_reset_expires TIMESTAMP,
+    totp_secret_encrypted TEXT,
+    totp_pending_secret_encrypted TEXT,
+    totp_enabled BOOLEAN NOT NULL DEFAULT FALSE,
     created_at TIMESTAMP DEFAULT NOW(),
     updated_at TIMESTAMP,
     last_login TIMESTAMP,
@@ -23,7 +26,7 @@ CREATE TABLE IF NOT EXISTS  users (
 CREATE TABLE IF NOT EXISTS oauth2_clients (
     id VARCHAR PRIMARY KEY,
     client_id VARCHAR(255) UNIQUE NOT NULL,
-    client_secret VARCHAR(255) NOT NULL,
+    client_secret VARCHAR(255),
     client_name VARCHAR(255) NOT NULL,
     redirect_uris JSON NOT NULL,
     grant_types JSON DEFAULT '["authorization_code", "refresh_token"]',
@@ -48,6 +51,10 @@ CREATE TABLE IF NOT EXISTS  oauth2_authorization_codes (
     redirect_uri VARCHAR(255) NOT NULL,
     scope VARCHAR(255),
     state VARCHAR(255),
+    nonce VARCHAR(512),
+    auth_time TIMESTAMPTZ,
+    code_challenge VARCHAR(255),
+    code_challenge_method VARCHAR(10),
     expires_at TIMESTAMP NOT NULL,
     is_used BOOLEAN DEFAULT FALSE,
     created_at TIMESTAMP DEFAULT NOW()
@@ -56,7 +63,7 @@ CREATE TABLE IF NOT EXISTS  oauth2_authorization_codes (
 CREATE TABLE IF NOT EXISTS  oauth2_access_tokens (
     id VARCHAR PRIMARY KEY,
     access_token VARCHAR(255) UNIQUE NOT NULL,
-    refresh_token VARCHAR(255),
+    refresh_token_hash VARCHAR(64),
     client_id VARCHAR(255) NOT NULL,
     user_id VARCHAR NOT NULL,
     scope VARCHAR(255),
@@ -67,13 +74,66 @@ CREATE TABLE IF NOT EXISTS  oauth2_access_tokens (
     created_at TIMESTAMP DEFAULT NOW()
 );
 
+CREATE TABLE IF NOT EXISTS auth_sessions (
+    id VARCHAR PRIMARY KEY,
+    user_id VARCHAR NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    device_name VARCHAR(100),
+    user_agent TEXT,
+    ip_address VARCHAR(64),
+    authentication_method VARCHAR(32) NOT NULL DEFAULT 'password',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    last_seen_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    expires_at TIMESTAMPTZ NOT NULL,
+    revoked_at TIMESTAMPTZ
+);
+
 CREATE TABLE IF NOT EXISTS refresh_tokens (
     id VARCHAR PRIMARY KEY,
     user_id VARCHAR NOT NULL,
-    token VARCHAR(255) UNIQUE NOT NULL,
-    expires_at TIMESTAMP NOT NULL,
-    created_at TIMESTAMP DEFAULT NOW(),
-    is_revoked BOOLEAN DEFAULT FALSE
+    token_hash VARCHAR(64) UNIQUE NOT NULL,
+    family_id VARCHAR NOT NULL,
+    session_id VARCHAR NOT NULL REFERENCES auth_sessions(id) ON DELETE CASCADE,
+    parent_id VARCHAR,
+    replaced_by_id VARCHAR,
+    expires_at TIMESTAMPTZ NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    is_revoked BOOLEAN DEFAULT FALSE,
+    used_at TIMESTAMPTZ,
+    revoked_at TIMESTAMPTZ
+);
+
+CREATE TABLE IF NOT EXISTS auth_challenges (
+    id VARCHAR PRIMARY KEY,
+    user_id VARCHAR REFERENCES users(id) ON DELETE CASCADE,
+    session_id VARCHAR REFERENCES auth_sessions(id) ON DELETE CASCADE,
+    purpose VARCHAR(40) NOT NULL,
+    challenge TEXT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    expires_at TIMESTAMPTZ NOT NULL,
+    used_at TIMESTAMPTZ
+);
+
+CREATE TABLE IF NOT EXISTS passkey_credentials (
+    id VARCHAR PRIMARY KEY,
+    user_id VARCHAR NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    credential_id VARCHAR(1024) UNIQUE NOT NULL,
+    public_key BYTEA NOT NULL,
+    sign_count INTEGER NOT NULL DEFAULT 0,
+    name VARCHAR(100) NOT NULL DEFAULT 'Passkey',
+    transports JSON,
+    aaguid VARCHAR(64),
+    device_type VARCHAR(32),
+    backed_up BOOLEAN NOT NULL DEFAULT FALSE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    last_used_at TIMESTAMPTZ
+);
+
+CREATE TABLE IF NOT EXISTS totp_recovery_codes (
+    id VARCHAR PRIMARY KEY,
+    user_id VARCHAR NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    code_hash VARCHAR(64) UNIQUE NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    used_at TIMESTAMPTZ
 );
 
 -- Behavioral Analytics Tables
@@ -130,60 +190,62 @@ CREATE TABLE IF NOT EXISTS fraud_alerts (
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
 
--- Insert default admin user if not exists
--- Password: SecurePass123! (bcrypt hashed)
--- Note: This hash was generated using bcrypt with cost 12
-INSERT INTO users (
-    id,
-    email,
-    username,
-    hashed_password,
-    first_name,
-    last_name,
-    is_active,
-    is_verified,
-    is_superuser,
-    role,
-    created_at
-) VALUES (
-    'admin-user-001',
-    'admin@example.com',
-    'admin',
-    '$2b$12$llBIEekPiz01Z0huRnLxje0LO/BCZw8igZ4i.1wXJ7ypBxErF4w1W',
-    'System',
-    'Administrator',
-    true,
-    true,
-    true,
-    'admin',
-    NOW()
-) ON CONFLICT (email) DO NOTHING;
+-- Versioned deterministic authentication risk policies and decision audit.
+CREATE TABLE IF NOT EXISTS risk_policies (
+    id VARCHAR PRIMARY KEY,
+    name VARCHAR(100) NOT NULL,
+    version INTEGER NOT NULL CHECK (version > 0),
+    status VARCHAR(16) NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'active', 'retired')),
+    policy_document JSONB NOT NULL,
+    checksum VARCHAR(64) NOT NULL,
+    description TEXT,
+    created_by VARCHAR REFERENCES users(id) ON DELETE SET NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    activated_at TIMESTAMPTZ,
+    CONSTRAINT uq_risk_policy_name_version UNIQUE (name, version)
+);
 
--- Insert default test user if not exists
--- Password: TestPass123! (bcrypt hashed)
--- Note: This hash was generated using bcrypt with cost 12
-INSERT INTO users (
-    id,
-    email,
-    username,
-    hashed_password,
-    first_name,
-    last_name,
-    is_active,
-    is_verified,
-    is_superuser,
-    role,
-    created_at
-) VALUES (
-    'test-user-001',
-    'test@example.com',
-    'testuser',
-    '$2b$12$dGjMwHBqXn/ZFxdkzUGrNukDn9Nn0gTZruu4j/sEGPgJ/vH/KeApO',
-    'Test',
-    'User',
-    true,
-    true,
-    false,
-    'user',
-    NOW()
-) ON CONFLICT (email) DO NOTHING;
+CREATE TABLE IF NOT EXISTS risk_decisions (
+    id VARCHAR PRIMARY KEY,
+    correlation_id VARCHAR(100) NOT NULL UNIQUE,
+    user_id VARCHAR REFERENCES users(id) ON DELETE SET NULL,
+    context VARCHAR(50) NOT NULL,
+    policy_id VARCHAR NOT NULL REFERENCES risk_policies(id) ON DELETE RESTRICT,
+    policy_name VARCHAR(100) NOT NULL,
+    policy_version INTEGER NOT NULL,
+    policy_checksum VARCHAR(64) NOT NULL,
+    outcome VARCHAR(16) NOT NULL CHECK (outcome IN ('allow', 'step_up', 'deny', 'review')),
+    score INTEGER NOT NULL CHECK (score >= 0 AND score <= 100),
+    input_features JSONB NOT NULL,
+    contributions JSONB NOT NULL,
+    reason_codes JSONB NOT NULL,
+    ai_shadow JSONB,
+    ai_shadow_enabled BOOLEAN NOT NULL DEFAULT FALSE,
+    enforced_by VARCHAR(40) NOT NULL DEFAULT 'deterministic_policy',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS ix_risk_policies_status ON risk_policies(status);
+CREATE INDEX IF NOT EXISTS ix_risk_decisions_user_id ON risk_decisions(user_id);
+CREATE INDEX IF NOT EXISTS ix_risk_decisions_outcome ON risk_decisions(outcome);
+CREATE INDEX IF NOT EXISTS ix_risk_decisions_created_at ON risk_decisions(created_at);
+
+-- Immutable evidence for explicitly enabled, sandboxed security simulations.
+CREATE TABLE IF NOT EXISTS security_simulation_runs (
+    id VARCHAR PRIMARY KEY,
+    scenario_id VARCHAR(80) NOT NULL,
+    status VARCHAR(16) NOT NULL CHECK (status IN ('passed', 'failed')),
+    seed INTEGER NOT NULL,
+    target_origin VARCHAR(255) NOT NULL,
+    evidence JSONB NOT NULL,
+    evidence_digest VARCHAR(64) NOT NULL,
+    requested_by VARCHAR REFERENCES users(id) ON DELETE SET NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS ix_security_simulation_runs_scenario_id ON security_simulation_runs(scenario_id);
+CREATE INDEX IF NOT EXISTS ix_security_simulation_runs_status ON security_simulation_runs(status);
+CREATE INDEX IF NOT EXISTS ix_security_simulation_runs_created_at ON security_simulation_runs(created_at);
+
+-- Demo identities and OAuth clients are reconciled by
+-- `python -m app.database.seed` after schema migrations. Keeping seed logic in
+-- one idempotent path avoids conflicting usernames and password hashes.

@@ -9,15 +9,18 @@ from typing import Optional, List, Dict, Any, Callable
 from functools import wraps
 from fastapi import HTTPException, Depends, status, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.database.connection import get_db
+from app.models.iam import IAMRole
 from app.models.user import User
-from app.utils.security import verify_token
+from app.services.principal_service import resolve_access_principal
 from app.services.iam_service import get_iam_service
 
 logger = logging.getLogger(__name__)
-security = HTTPBearer()
+security = HTTPBearer(auto_error=False)
 
 # ===== AUTHENTICATION DECORATORS =====
 
@@ -40,68 +43,42 @@ class IAMContext:
         self.iam_service = get_iam_service(db)
 
 async def get_iam_context(
+    request: Request,
     credentials: HTTPAuthorizationCredentials = Depends(security),
     db: AsyncSession = Depends(get_db)
 ) -> IAMContext:
     """Get authenticated user context for IAM operations"""
 
-    if not credentials:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Authentication required",
-            headers={"WWW-Authenticate": "Bearer"}
-        )
-
     try:
-        # Verify JWT token
-        payload = verify_token(credentials.credentials)
-        if not payload:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid or expired token",
-                headers={"WWW-Authenticate": "Bearer"}
+        principal = await resolve_access_principal(
+            credentials.credentials if credentials else None,
+            db,
+        )
+        hydrated_user = await db.execute(
+            select(User)
+            .options(
+                selectinload(User.iam_roles).selectinload(IAMRole.permissions),
+                selectinload(User.scopes),
             )
+            .where(User.id == principal.user.id)
+        )
+        user = hydrated_user.scalar_one()
 
-        user_id = payload.get("sub")
-        if not user_id:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid token payload",
-                headers={"WWW-Authenticate": "Bearer"}
-            )
-
-        # Get user from database
-        user = await db.get(User, user_id)
-        if not user:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="User not found",
-                headers={"WWW-Authenticate": "Bearer"}
-            )
-
-        if not user.is_active:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Account is inactive",
-                headers={"WWW-Authenticate": "Bearer"}
-            )
-
-        # Extract request context
-        ip_address = None
-        user_agent = None
+        ip_address = request.client.host if request.client else None
+        user_agent = request.headers.get("user-agent")
 
         return IAMContext(
             user=user,
             db=db,
-            request=None,
+            request=request,
             ip_address=ip_address,
             user_agent=user_agent
         )
 
     except HTTPException:
         raise
-    except Exception as e:
-        logger.error(f"IAM context creation failed: {e}")
+    except Exception:
+        logger.exception("IAM context creation failed")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Authentication failed",
@@ -115,7 +92,7 @@ def require_permission(
     resource_type: Optional[str] = None,
     resource_id_param: Optional[str] = None,
     scope_id_param: Optional[str] = None,
-    use_temporal: bool = True
+    use_temporal: bool = False
 ):
     """
     Decorator to require specific permission for endpoint access
@@ -186,9 +163,6 @@ def require_permission(
                     detail=f"Permission denied: {permission_result.get('reason', 'insufficient_permissions')}"
                 )
 
-            # Add permission result to kwargs for endpoint use if needed
-            kwargs['_permission_result'] = permission_result
-
             return await func(*args, **kwargs)
 
         return wrapper
@@ -199,7 +173,7 @@ def require_any_permission(
     resource_type: Optional[str] = None,
     resource_id_param: Optional[str] = None,
     scope_id_param: Optional[str] = None,
-    use_temporal: bool = True
+    use_temporal: bool = False
 ):
     """
     Decorator to require ANY of the specified permissions for endpoint access
@@ -262,7 +236,6 @@ def require_any_permission(
                     detail=f"Permission denied: requires any of {permission_names}"
                 )
 
-            kwargs['_granted_permissions'] = granted_permissions
             return await func(*args, **kwargs)
 
         return wrapper
@@ -273,7 +246,7 @@ def require_all_permissions(
     resource_type: Optional[str] = None,
     resource_id_param: Optional[str] = None,
     scope_id_param: Optional[str] = None,
-    use_temporal: bool = True
+    use_temporal: bool = False
 ):
     """
     Decorator to require ALL of the specified permissions for endpoint access
@@ -340,7 +313,6 @@ def require_all_permissions(
                     detail=f"Permission denied: missing required permissions {denied_permissions}"
                 )
 
-            kwargs['_granted_permissions'] = granted_permissions
             return await func(*args, **kwargs)
 
         return wrapper
@@ -553,7 +525,7 @@ def get_user_permissions_summary(iam_context: IAMContext) -> Dict[str, Any]:
 def create_permission_check_function(
     permission_name: str,
     resource_type: Optional[str] = None,
-    use_temporal: bool = True
+    use_temporal: bool = False
 ):
     """Create a function that checks a specific permission"""
 

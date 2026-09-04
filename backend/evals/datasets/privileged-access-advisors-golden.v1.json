@@ -1,0 +1,107 @@
+{
+  "schema_version": "1",
+  "prompt_version": "privileged-access-v1",
+  "policy_version": "privileged-access-policy-v1",
+  "cases": [
+    {
+      "id": "bounded-short-lived-access",
+      "evidence": {
+        "permission_count": 2,
+        "permission_risk_levels": ["low"],
+        "role_priority_bucket": "medium",
+        "scope_type": "team",
+        "duration_bucket": "short",
+        "target_account_active": true,
+        "strong_auth_configured": true,
+        "justification_length_bucket": "normal"
+      },
+      "expected": {
+        "least_privilege": {
+          "recommendation": "support",
+          "reason_codes": ["BOUNDED_SCOPE", "SHORT_DURATION"],
+          "evidence_refs": ["scope_type", "duration_bucket"]
+        },
+        "security_context": {
+          "recommendation": "support",
+          "reason_codes": ["STRONG_AUTH_PRESENT"],
+          "evidence_refs": ["strong_auth_configured"]
+        }
+      }
+    },
+    {
+      "id": "global-critical-long-lived-access",
+      "evidence": {
+        "permission_count": 50,
+        "permission_risk_levels": ["low", "critical"],
+        "role_priority_bucket": "critical",
+        "scope_type": "global",
+        "duration_bucket": "long",
+        "target_account_active": true,
+        "strong_auth_configured": true,
+        "justification_length_bucket": "long"
+      },
+      "expected": {
+        "least_privilege": {
+          "recommendation": "concern",
+          "reason_codes": ["HIGH_RISK_PERMISSION", "LONG_DURATION", "NO_SCOPE"],
+          "evidence_refs": ["permission_risk_levels", "duration_bucket", "scope_type"]
+        },
+        "security_context": {
+          "recommendation": "support",
+          "reason_codes": ["STRONG_AUTH_PRESENT"],
+          "evidence_refs": ["strong_auth_configured"]
+        }
+      }
+    },
+    {
+      "id": "inactive-account-without-strong-auth",
+      "evidence": {
+        "permission_count": 1,
+        "permission_risk_levels": ["medium"],
+        "role_priority_bucket": "high",
+        "scope_type": "resource",
+        "duration_bucket": "medium",
+        "target_account_active": false,
+        "strong_auth_configured": false,
+        "justification_length_bucket": "brief"
+      },
+      "expected": {
+        "least_privilege": {
+          "recommendation": "support",
+          "reason_codes": ["BOUNDED_SCOPE", "SHORT_DURATION"],
+          "evidence_refs": ["scope_type", "duration_bucket"]
+        },
+        "security_context": {
+          "recommendation": "concern",
+          "reason_codes": ["ACCOUNT_INACTIVE", "NO_STRONG_AUTH"],
+          "evidence_refs": ["target_account_active", "strong_auth_configured"]
+        }
+      }
+    },
+    {
+      "id": "high-risk-access-to-inactive-account",
+      "evidence": {
+        "permission_count": 8,
+        "permission_risk_levels": ["high"],
+        "role_priority_bucket": "high",
+        "scope_type": "project",
+        "duration_bucket": "short",
+        "target_account_active": false,
+        "strong_auth_configured": true,
+        "justification_length_bucket": "normal"
+      },
+      "expected": {
+        "least_privilege": {
+          "recommendation": "concern",
+          "reason_codes": ["HIGH_RISK_PERMISSION"],
+          "evidence_refs": ["permission_risk_levels"]
+        },
+        "security_context": {
+          "recommendation": "concern",
+          "reason_codes": ["ACCOUNT_INACTIVE"],
+          "evidence_refs": ["target_account_active"]
+        }
+      }
+    }
+  ]
+}

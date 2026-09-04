@@ -2,10 +2,21 @@ from temporalio import activity
 from datetime import datetime, timedelta
 import secrets
 import logging
+from sqlalchemy import select
 
 from app.config import settings
+from app.database.connection import AsyncSessionLocal
+from app.models.oauth import OAuth2AccessToken, OAuth2AuthorizationCode
+from app.models.user import User
+from app.utils.security import (
+    create_access_token,
+    create_refresh_token,
+    hash_one_time_token,
+    verify_password,
+)
 
 logger = logging.getLogger(__name__)
+
 
 class AuthActivities:
     
@@ -21,8 +32,8 @@ class AuthActivities:
                 "expires_at": expires_at.isoformat()
             }
             
-        except Exception as e:
-            logger.error(f"Failed to generate verification token: {e}")
+        except Exception as exc:
+            logger.error("Failed to generate verification token exception_type=%s", type(exc).__name__)
             raise
     
     @activity.defn(name="generate_password_reset_token")
@@ -37,17 +48,14 @@ class AuthActivities:
                 "expires_at": expires_at.isoformat()
             }
             
-        except Exception as e:
-            logger.error(f"Failed to generate password reset token: {e}")
+        except Exception as exc:
+            logger.error("Failed to generate password reset token exception_type=%s", type(exc).__name__)
             raise
     
     @activity.defn(name="validate_password_reset_token")
     async def validate_password_reset_token(self, token: str) -> bool:
         """Validate password reset token"""
         try:
-            from app.database.connection import AsyncSessionLocal
-            from app.models.user import User
-            from sqlalchemy import select
             
             async with AsyncSessionLocal() as session:
                 # Find user by reset token
@@ -65,16 +73,14 @@ class AuthActivities:
                 
                 return True
                 
-        except Exception as e:
-            logger.error(f"Failed to validate password reset token: {e}")
+        except Exception as exc:
+            logger.error("Failed to validate password reset token exception_type=%s", type(exc).__name__)
             return False
     
     @activity.defn(name="generate_oauth_authorization_code")
     async def generate_oauth_authorization_code(self, client_id: str, user_id: str, redirect_uri: str, scope: str = None, state: str = None) -> dict:
         """Generate OAuth2 authorization code"""
         try:
-            from app.database.connection import AsyncSessionLocal
-            from app.models.oauth import OAuth2AuthorizationCode
             
             code = secrets.token_urlsafe(32)
             expires_at = datetime.utcnow() + timedelta(minutes=settings.OAUTH2_AUTHORIZATION_CODE_EXPIRE_MINUTES)
@@ -93,7 +99,7 @@ class AuthActivities:
                 session.add(auth_code)
                 await session.commit()
                 
-                logger.info(f"OAuth2 authorization code generated for client {client_id}, user {user_id}")
+                logger.info("OAuth2 authorization code generated client_id=%s user_id=%s", client_id, user_id)
                 
                 return {
                     "code": code,
@@ -101,18 +107,14 @@ class AuthActivities:
                     "state": state
                 }
                 
-        except Exception as e:
-            logger.error(f"Failed to generate OAuth2 authorization code: {e}")
+        except Exception as exc:
+            logger.error("Failed to generate OAuth2 authorization code exception_type=%s", type(exc).__name__)
             raise
     
     @activity.defn(name="exchange_authorization_code")
     async def exchange_authorization_code(self, code: str, client_id: str, redirect_uri: str) -> dict:
         """Exchange authorization code for access token"""
         try:
-            from app.database.connection import AsyncSessionLocal
-            from app.models.oauth import OAuth2AuthorizationCode, OAuth2AccessToken
-            from app.utils.security import create_access_token, create_refresh_token
-            from sqlalchemy import select
             
             async with AsyncSessionLocal() as session:
                 # Find authorization code
@@ -146,7 +148,7 @@ class AuthActivities:
                 # Store access token
                 oauth_token = OAuth2AccessToken(
                     access_token=access_token,
-                    refresh_token=refresh_token,
+                    refresh_token_hash=hash_one_time_token(refresh_token),
                     client_id=client_id,
                     user_id=auth_code.user_id,
                     scope=auth_code.scope,
@@ -157,7 +159,11 @@ class AuthActivities:
                 session.add(oauth_token)
                 await session.commit()
                 
-                logger.info(f"Authorization code exchanged for access token: client {client_id}, user {auth_code.user_id}")
+                logger.info(
+                    "Authorization code exchanged client_id=%s user_id=%s",
+                    client_id,
+                    auth_code.user_id,
+                )
                 
                 return {
                     "access_token": access_token,
@@ -167,17 +173,14 @@ class AuthActivities:
                     "scope": auth_code.scope
                 }
                 
-        except Exception as e:
-            logger.error(f"Failed to exchange authorization code: {e}")
+        except Exception as exc:
+            logger.error("Failed to exchange authorization code exception_type=%s", type(exc).__name__)
             raise
     
     @activity.defn(name="revoke_access_token")
     async def revoke_access_token(self, token: str) -> bool:
         """Revoke access token"""
         try:
-            from app.database.connection import AsyncSessionLocal
-            from app.models.oauth import OAuth2AccessToken
-            from sqlalchemy import select
             
             async with AsyncSessionLocal() as session:
                 # Find access token
@@ -189,23 +192,19 @@ class AuthActivities:
                 if oauth_token:
                     oauth_token.is_revoked = True
                     await session.commit()
-                    logger.info(f"Access token revoked: {token[:8]}...")
+                    logger.info("Access token revoked")
                     return True
                 
                 return False
                 
-        except Exception as e:
-            logger.error(f"Failed to revoke access token: {e}")
+        except Exception as exc:
+            logger.error("Failed to revoke access token exception_type=%s", type(exc).__name__)
             return False
     
     @activity.defn(name="authenticate_user")
     async def authenticate_user(self, email: str, password: str) -> dict:
         """Authenticate user credentials for login"""
         try:
-            from app.database.connection import AsyncSessionLocal
-            from app.models.user import User
-            from app.utils.security import verify_password
-            from sqlalchemy import select
             
             async with AsyncSessionLocal() as session:
                 # Find user by email
@@ -215,7 +214,7 @@ class AuthActivities:
                 user = result.scalar_one_or_none()
                 
                 if not user:
-                    logger.warning(f"User not found for login attempt: {email}")
+                    logger.warning("Login failed reason=invalid_credentials")
                     return {
                         "success": False,
                         "error": "Invalid credentials"
@@ -223,7 +222,7 @@ class AuthActivities:
                 
                 # Verify password
                 if not verify_password(password, user.hashed_password):
-                    logger.warning(f"Invalid password for user: {email}")
+                    logger.warning("Login failed user_id=%s reason=invalid_credentials", user.id)
                     return {
                         "success": False,
                         "error": "Invalid credentials"
@@ -231,13 +230,20 @@ class AuthActivities:
                 
                 # Check if user is active
                 if not user.is_active:
-                    logger.warning(f"Inactive user attempted login: {email}")
+                    logger.warning("Login failed user_id=%s reason=account_inactive", user.id)
                     return {
                         "success": False,
                         "error": "Account is deactivated"
                     }
+
+                if not user.is_verified:
+                    logger.warning("Login failed user_id=%s reason=email_not_verified", user.id)
+                    return {
+                        "success": False,
+                        "error": "Email not verified. Please check your email and verify your account."
+                    }
                 
-                logger.info(f"User authenticated successfully: {email}")
+                logger.info("User authenticated user_id=%s", user.id)
                 return {
                     "success": True,
                     "user_id": user.id,
@@ -245,8 +251,8 @@ class AuthActivities:
                     "is_verified": user.is_verified
                 }
                 
-        except Exception as e:
-            logger.error(f"Authentication failed: {e}")
+        except Exception as exc:
+            logger.error("Authentication failed exception_type=%s", type(exc).__name__)
             return {
                 "success": False,
                 "error": "Authentication failed"
@@ -256,56 +262,23 @@ class AuthActivities:
     async def create_login_tokens(self, user_id: str, email: str) -> dict:
         """Create JWT tokens for authenticated user"""
         try:
-            from app.utils.security import create_access_token, create_refresh_token
             
             # Create tokens
             access_token = create_access_token({"sub": user_id, "email": email})
             refresh_token = create_refresh_token({"sub": user_id})
             
-            logger.info(f"Tokens created for user: {email}")
+            logger.info("Tokens created user_id=%s", user_id)
             return {
                 "access_token": access_token,
                 "refresh_token": refresh_token,
                 "expires_in": settings.JWT_ACCESS_TOKEN_EXPIRE_MINUTES * 60
             }
             
-        except Exception as e:
-            logger.error(f"Token creation failed: {e}")
+        except Exception as exc:
+            logger.error("Token creation failed exception_type=%s", type(exc).__name__)
             raise
     
     @activity.defn(name="store_login_session")
     async def store_login_session(self, user_id: str, refresh_token: str) -> dict:
-        """Store refresh token and update last login"""
-        try:
-            from app.database.connection import AsyncSessionLocal
-            from app.models.user import User, RefreshToken
-            from sqlalchemy import select
-            
-            async with AsyncSessionLocal() as session:
-                # Get user
-                user = await session.get(User, user_id)
-                if not user:
-                    raise ValueError("User not found")
-                
-                # Store refresh token
-                refresh_token_record = RefreshToken(
-                    user_id=user_id,
-                    token=refresh_token,
-                    expires_at=datetime.utcnow() + timedelta(days=settings.JWT_REFRESH_TOKEN_EXPIRE_DAYS)
-                )
-                session.add(refresh_token_record)
-                
-                # Update last login
-                user.last_login = datetime.utcnow()
-                
-                await session.commit()
-                
-                logger.info(f"Login session stored for user: {user.email}")
-                return {
-                    "success": True,
-                    "last_login": user.last_login.isoformat()
-                }
-                
-        except Exception as e:
-            logger.error(f"Failed to store login session: {e}")
-            raise
+        """Reject legacy Temporal token persistence; auth tokens are DB-transactional."""
+        raise RuntimeError("Temporal credential/token persistence is disabled")

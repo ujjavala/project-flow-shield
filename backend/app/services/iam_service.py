@@ -37,7 +37,7 @@ class IAMService:
         scope_id: Optional[str] = None,
         granted_by: Optional[str] = None,
         expires_at: Optional[datetime] = None,
-        use_temporal: bool = True
+        use_temporal: bool = False
     ) -> Dict[str, Any]:
         """
         Assign a role to a user, optionally within a specific scope
@@ -175,7 +175,7 @@ class IAMService:
         resource_id: Optional[str] = None,
         scope_id: Optional[str] = None,
         context: Optional[Dict[str, Any]] = None,
-        use_temporal: bool = True
+        use_temporal: bool = False
     ) -> Dict[str, Any]:
         """
         Evaluate whether a user has a specific permission
@@ -225,12 +225,12 @@ class IAMService:
                     user_id, permission_name, resource_type, resource_id, scope_id, context
                 )
 
-        except Exception as e:
-            logger.error(f"Failed to evaluate permission {permission_name} for user {user_id}: {e}")
+        except Exception:
+            logger.exception("Failed to evaluate IAM permission %s", permission_name)
             # Return deny by default on errors
             return {
                 'access_granted': False,
-                'reason': f'evaluation_error: {str(e)}',
+                'reason': 'evaluation_error',
                 'user_id': user_id,
                 'permission': permission_name,
                 'evaluated_at': datetime.now().isoformat()
@@ -250,7 +250,7 @@ class IAMService:
         try:
             # Get user with roles and scopes
             user_query = select(User).options(
-                selectinload(User.iam_roles),
+                selectinload(User.iam_roles).selectinload(IAMRole.permissions),
                 selectinload(User.scopes)
             ).where(User.id == user_id)
 
@@ -262,6 +262,11 @@ class IAMService:
 
             if not user.is_active:
                 return self._create_permission_result(False, "user_inactive", user_id, permission_name)
+
+            if user.is_superuser:
+                return self._create_permission_result(
+                    True, "superuser", user_id, permission_name, ["superuser"]
+                )
 
             # Get the permission definition
             permission_query = select(IAMPermission).where(IAMPermission.name == permission_name)
@@ -275,11 +280,25 @@ class IAMService:
                 return self._create_permission_result(False, "permission_inactive", user_id, permission_name)
 
             # Check if user has any roles that grant this permission
+            now = datetime.now()
+            active_assignments_query = select(user_roles_table.c.role_id).where(
+                and_(
+                    user_roles_table.c.user_id == user_id,
+                    user_roles_table.c.is_active.is_(True),
+                    or_(
+                        user_roles_table.c.expires_at.is_(None),
+                        user_roles_table.c.expires_at > now,
+                    ),
+                )
+            )
+            active_assignments = await self.db.execute(active_assignments_query)
+            active_role_ids = set(active_assignments.scalars().all())
+
             user_roles = user.iam_roles if hasattr(user, 'iam_roles') else []
             granted_by_roles = []
 
             for role in user_roles:
-                if not role.is_active:
+                if not role.is_active or role.id not in active_role_ids:
                     continue
 
                 # Check if role has this permission
@@ -287,7 +306,7 @@ class IAMService:
                     if role_permission.name == permission_name and role_permission.is_active:
                         # Check scope compatibility
                         if await self._is_permission_applicable_to_scope(
-                            role_permission, scope_id, user_id
+                            role_permission, scope_id, user_id, role.id
                         ):
                             granted_by_roles.append(role.name)
                             break
@@ -541,7 +560,8 @@ class IAMService:
         self,
         permission: IAMPermission,
         scope_id: Optional[str],
-        user_id: str
+        user_id: str,
+        role_id: str,
     ) -> bool:
         """Check if a permission applies to the given scope"""
 
@@ -551,13 +571,22 @@ class IAMService:
         if not scope_id:
             return True  # No scope restriction
 
-        # Check if permission's scope types include the current scope
+        # Check if permission's scope types include the current scope.
         if permission.scope_types:
             scope = await self.db.get(IAMScope, scope_id)
-            if scope and scope.scope_type not in permission.scope_types:
+            if not scope or not scope.is_active or scope.scope_type not in permission.scope_types:
                 return False
 
-        return True
+        assignment_query = select(role_scope_table.c.scope_id).where(
+            and_(
+                role_scope_table.c.user_id == user_id,
+                role_scope_table.c.role_id == role_id,
+                role_scope_table.c.scope_id == scope_id,
+                role_scope_table.c.is_active.is_(True),
+            )
+        )
+        assignment = await self.db.execute(assignment_query)
+        return assignment.scalar_one_or_none() is not None
 
     async def _check_permission_constraints(
         self,
@@ -607,9 +636,13 @@ class IAMService:
     ) -> bool:
         """Check if user can perform action in specific scope"""
 
-        # This would involve checking user's roles in the scope and their permissions
-        # For now, return True - implement full logic as needed
-        return True
+        permission_name = action if "." in action else f"iam.scopes.{action}"
+        result = await self._evaluate_permission_direct(
+            user_id=user_id,
+            permission_name=permission_name,
+            scope_id=scope_id,
+        )
+        return bool(result.get("access_granted"))
 
 # Global IAM service instance
 iam_service: Optional[IAMService] = None

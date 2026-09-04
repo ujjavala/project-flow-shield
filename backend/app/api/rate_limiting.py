@@ -6,28 +6,24 @@ Provides API endpoints for rate limiting management and monitoring
 from fastapi import APIRouter, HTTPException, Depends, Request, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel
-from typing import Dict, Any, Optional, List
+from typing import Dict, Any, Optional, List, Literal
 from datetime import datetime, timedelta
 import logging
 
-from app.temporal.client import get_temporal_client
-from app.temporal.workflows.rate_limiting_workflow import (
-    RateLimitingWorkflow,
-    RateLimitResetWorkflow,
-    AdaptiveRateLimitingWorkflow,
-    RateLimitRequest,
-    RateLimitResponse
-)
+from app.services.rate_limit_service import POLICIES, rate_limiter
+from app.config import settings
+from app.utils.security import verify_token
+from app.utils.admin_auth import get_admin_user
 
 logger = logging.getLogger(__name__)
 security = HTTPBearer()
 
-router = APIRouter(prefix="/rate-limiting")
+router = APIRouter(prefix="/rate-limiting", dependencies=[Depends(get_admin_user)])
 
 # Request/Response models
 class RateLimitCheckRequest(BaseModel):
     identifier: str  # IP or user_id
-    limit_type: str  # 'login', 'api', 'registration', 'mfa'
+    limit_type: Literal['login', 'api', 'registration', 'password_reset', 'mfa']
     action: str      # Specific action being rate limited
     metadata: Optional[Dict[str, Any]] = None
 
@@ -74,29 +70,11 @@ async def check_rate_limit(
         # Extract client IP if identifier is not provided
         client_ip = client_request.client.host if hasattr(client_request, 'client') else '127.0.0.1'
 
-        # Create rate limit key
-        rate_limit_key = f"{request.limit_type}:{request.identifier or client_ip}"
-
-        # Create Temporal request
-        temporal_request = RateLimitRequest(
-            key=rate_limit_key,
-            limit_type=request.limit_type,
-            identifier=request.identifier or client_ip,
-            action=request.action,
-            metadata=request.metadata or {}
+        result = await rate_limiter.check(
+            request.identifier or client_ip,
+            request.limit_type,
         )
-
-        # Execute Temporal workflow
-        client = await get_temporal_client()
-        result = await client.execute_workflow(
-            RateLimitingWorkflow.run,
-            temporal_request,
-            id=f"rate_limit_check_{rate_limit_key}_{int(datetime.now().timestamp())}",
-            task_queue="guardflow",
-            execution_timeout=timedelta(seconds=30)
-        )
-
-        return RateLimitCheckResponse(**result.__dict__)
+        return RateLimitCheckResponse(**result)
 
     except Exception as e:
         logger.error(f"Rate limit check failed: {e}")
@@ -114,7 +92,7 @@ async def get_rate_limit_status(
 
     try:
         import redis
-        redis_client = redis.Redis(host='localhost', port=6379, db=1, decode_responses=True)
+        redis_client = redis.Redis.from_url(settings.REDIS_URL, decode_responses=True)
 
         rate_limit_key = f"{limit_type}:{identifier}"
         redis_key = f"rate_limit:{rate_limit_key}"
@@ -167,18 +145,22 @@ async def get_rate_limit_metrics(
 ) -> RateLimitMetricsResponse:
     """Get rate limiting metrics (admin only)"""
 
-    # TODO: Add proper admin authentication
-    # For now, just check that a token is provided
-    if not credentials.credentials:
+    payload = verify_token(credentials.credentials)
+    if not payload:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Authentication required"
+            detail="Invalid authentication credentials"
+        )
+    if payload.get("type") != "access" or payload.get("is_admin") is not True:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Administrator access required"
         )
 
     try:
         import redis
         import json
-        redis_client = redis.Redis(host='localhost', port=6379, db=1, decode_responses=True)
+        redis_client = redis.Redis.from_url(settings.REDIS_URL, decode_responses=True)
 
         # Initialize metrics
         metrics = {
@@ -271,7 +253,7 @@ async def get_adaptive_limits(
     try:
         import redis
         import json
-        redis_client = redis.Redis(host='localhost', port=6379, db=1, decode_responses=True)
+        redis_client = redis.Redis.from_url(settings.REDIS_URL, decode_responses=True)
 
         # Get current adaptive limits
         adaptive_limits_key = "adaptive_rate_limits"
@@ -328,20 +310,12 @@ async def trigger_rate_limit_reset(
         )
 
     try:
-        client = await get_temporal_client()
-
-        result = await client.execute_workflow(
-            RateLimitResetWorkflow.run,
-            {},
-            id=f"manual_rate_limit_reset_{int(datetime.now().timestamp())}",
-            task_queue="guardflow",
-            execution_timeout=timedelta(minutes=5)
-        )
+        cleared = await rate_limiter.reset()
 
         return {
             "status": "success",
             "message": "Rate limit reset completed",
-            "result": result
+            "result": {"cleared_buckets": cleared}
         }
 
     except Exception as e:
@@ -364,20 +338,13 @@ async def trigger_adaptive_update(
         )
 
     try:
-        client = await get_temporal_client()
-
-        result = await client.execute_workflow(
-            AdaptiveRateLimitingWorkflow.run,
-            {},
-            id=f"manual_adaptive_update_{int(datetime.now().timestamp())}",
-            task_queue="guardflow",
-            execution_timeout=timedelta(minutes=2)
-        )
-
         return {
             "status": "success",
-            "message": "Adaptive rate limiting update completed",
-            "result": result
+            "message": "Deterministic fixed-window policies remain active",
+            "result": {
+                name: {"limit": policy.limit, "window_seconds": policy.window_seconds}
+                for name, policy in POLICIES.items()
+            }
         }
 
     except Exception as e:
@@ -403,7 +370,7 @@ async def clear_violations(
 
     try:
         import redis
-        redis_client = redis.Redis(host='localhost', port=6379, db=1, decode_responses=True)
+        redis_client = redis.Redis.from_url(settings.REDIS_URL, decode_responses=True)
 
         cleared_count = 0
 
@@ -444,7 +411,7 @@ async def rate_limiting_health():
 
     try:
         import redis
-        redis_client = redis.Redis(host='localhost', port=6379, db=1, decode_responses=True)
+        redis_client = redis.Redis.from_url(settings.REDIS_URL, decode_responses=True)
 
         # Test Redis connection
         redis_client.ping()

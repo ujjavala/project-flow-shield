@@ -1,16 +1,16 @@
-# 🚀 Revolutionary AI-Powered Authentication with Temporal.io
+# Authentication with Temporal.io and Optional AI
 
-## **Why This Project is Groundbreaking**
+## **Design Position**
 
-This is **the world's first comprehensive AI-enhanced authentication system** built on Temporal.io workflows. **Nobody else is combining AI/ML with Temporal for authentication at this level.**
+FlowShield uses deterministic, explainable policy for security enforcement and Temporal for durable identity operations. Optional AI output is shadow-only: it can be evaluated and observed without silently changing an authentication decision. Historical heavyweight ML modules remain an experimental profile and require separate dependencies, models, datasets, and evaluation.
 
-### 🎯 **Unique Value Propositions**
+### **Unique Value Propositions**
 
-#### **1. AI-First Authentication Security**
-- **Real-time ML fraud detection** with 95%+ accuracy using XGBoost ensemble models
-- **Behavioral biometrics** powered by LSTM neural networks for continuous authentication
-- **Intelligent password analysis** beyond traditional rules using transformer models
-- **Adaptive security** that adjusts requirements based on ML risk assessment in real-time
+#### **1. Explainable Authentication Security**
+- **Deterministic risk policy** with version, checksum, reason codes, and signal contributions
+- **Four explicit outcomes**: allow, challenge, review, and deny
+- **Optional Ollama shadow analysis** that cannot override the policy decision
+- **Strong authentication** through passkeys, TOTP, recovery codes, and protected sessions
 
 #### **2. Advanced Temporal Patterns**
 - **Saga pattern** for distributed authentication across multiple services with compensation
@@ -18,11 +18,11 @@ This is **the world's first comprehensive AI-enhanced authentication system** bu
 - **Signals & Updates** for real-time authentication decision adjustments
 - **Continue-as-New** for long-running session monitoring without history bloat
 
-#### **3. Production-Ready AI Integration**
-- **Graceful AI fallbacks** - system works even when AI/ML services are unavailable
-- **Model versioning and caching** with Redis for sub-100ms response times
-- **Comprehensive testing** including replay tests and workflow determinism validation
-- **Full observability** with AI metrics and Temporal search attributes
+#### **3. Optional AI Integration**
+- **Graceful fallback** - authentication remains available when Ollama is unavailable
+- **Non-enforcing evaluation** - shadow output is retained for comparison and tuning
+- **Local-first operation** - the optional Compose profile runs Ollama without sending data to a hosted model
+- **Evaluation required** - promotion beyond shadow mode requires a versioned dataset, quality gates, and security review
 
 ## **Technical Innovation**
 

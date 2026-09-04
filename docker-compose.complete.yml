@@ -1,5 +1,3 @@
-version: '3.8'
-
 # 🚀 Complete AI-Powered Authentication System
 # Single Docker Compose setup with everything included:
 # - PostgreSQL Database
@@ -236,16 +234,12 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+      args:
+        VITE_API_URL: http://localhost:8000
+        VITE_TEMPORAL_UI_URL: http://localhost:8081
+        VITE_AI_ENABLED: "true"
     ports:
       - "3000:3000"
-    environment:
-      - REACT_APP_API_URL=http://localhost:8000
-      - REACT_APP_TEMPORAL_UI_URL=http://localhost:8081
-      - REACT_APP_AI_ENABLED=true
-      - CHOKIDAR_USEPOLLING=true
-    volumes:
-      - ./frontend/src:/app/src
-      - ./frontend/public:/app/public
     depends_on:
       backend:
         condition: service_healthy

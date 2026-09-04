@@ -2,9 +2,13 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { BrowserRouter } from 'react-router-dom';
 import Login from '../Login';
+import { vi } from 'vitest';
 
 // Mock the auth context hook
-const mockLogin = jest.fn();
+const { mockLogin, mockNavigate } = vi.hoisted(() => ({
+  mockLogin: vi.fn(),
+  mockNavigate: vi.fn(),
+}));
 const mockUseAuth = {
   login: mockLogin,
   user: null,
@@ -12,14 +16,13 @@ const mockUseAuth = {
   backendOnline: true,
 };
 
-jest.mock('../../context/AuthContext', () => ({
+vi.mock('../../context/AuthContext', () => ({
   useAuth: () => mockUseAuth,
 }));
 
 // Mock navigate
-const mockNavigate = jest.fn();
-jest.mock('react-router-dom', () => ({
-  ...jest.requireActual('react-router-dom'),
+vi.mock('react-router-dom', async () => ({
+  ...(await vi.importActual('react-router-dom')),
   useNavigate: () => mockNavigate,
 }));
 
@@ -33,7 +36,7 @@ const renderLogin = () => {
 
 describe('Login Component - Simple Tests', () => {
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
   });
 
   test('renders login page structure', () => {

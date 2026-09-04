@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { FiLock, FiStar, FiActivity, FiMail, FiTool, FiUser, FiRotateCcw, FiLink, FiBarChart2, FiSettings, FiBookOpen, FiFileText, FiPlay, FiShield, FiCheckCircle, FiTarget } from 'react-icons/fi';
+import { Lock as FiLock, Star as FiStar, Activity as FiActivity, Mail as FiMail, Wrench as FiTool, User as FiUser, RotateCcw as FiRotateCcw, Link as FiLink, BarChart2 as FiBarChart2, Settings as FiSettings, BookOpen as FiBookOpen, FileText as FiFileText, Play as FiPlay, Shield as FiShield, CheckCircle as FiCheckCircle, Target as FiTarget } from 'lucide-react';
 
 const About = () => {
   return (

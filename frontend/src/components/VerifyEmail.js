@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useSearchParams, useNavigate } from 'react-router-dom';
-import { FiCheckCircle, FiXCircle, FiAlertTriangle } from 'react-icons/fi';
+import { CheckCircle as FiCheckCircle, XCircle as FiXCircle, TriangleAlert as FiAlertTriangle } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 const VerifyEmail = () => {

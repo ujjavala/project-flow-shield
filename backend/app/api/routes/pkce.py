@@ -1,34 +1,82 @@
-"""
-PKCE OAuth2 Endpoints
-OAuth 2.1 compliant PKCE implementation with Temporal workflows
-"""
-from fastapi import APIRouter, HTTPException, Depends, Request, Response
-from fastapi.responses import RedirectResponse
-from fastapi.security import HTTPBearer
-from starlette.status import HTTP_400_BAD_REQUEST, HTTP_401_UNAUTHORIZED, HTTP_500_INTERNAL_SERVER_ERROR
-import temporalio.client as temporal_client
-from temporalio.common import RetryPolicy
-from datetime import timedelta
-import logging
-from typing import Dict, Any, Optional
-from urllib.parse import urlencode, urlparse
+"""OAuth 2.1 authorization-code endpoints with mandatory PKCE S256."""
 
-from app.models.pkce import (
-    PKCERequest, 
-    PKCETokenRequest, 
-    PKCEResponse, 
-    PKCETokenResponse,
-    PKCEError,
-    PKCEErrorTypes,
-    PKCEUtils
-)
-from app.temporal.client import get_temporal_client
-from app.services.auth_service import get_current_user
+from __future__ import annotations
+
+import logging
+from datetime import datetime, timezone
+from typing import Optional
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
+
+from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi.responses import JSONResponse, RedirectResponse
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from pydantic import ValidationError
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.database.connection import get_db
+from app.models.oauth import OAuth2Client
+from app.models.pkce import PKCERequest, PKCEResponse, PKCETokenRequest, PKCETokenResponse
 from app.models.user import User
+from app.services.pkce_service import (
+    PKCEClientError,
+    PKCEGrantError,
+    get_registered_client,
+    issue_authorization_code,
+    redeem_authorization_code,
+)
+from app.services.principal_service import resolve_access_principal
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/oauth2/pkce", tags=["PKCE OAuth2"])
 security = HTTPBearer(auto_error=False)
+
+NO_STORE_HEADERS = {
+    "Cache-Control": "no-store",
+    "Pragma": "no-cache",
+}
+
+
+def _redirect_uri(uri: str, params: dict[str, str]) -> str:
+    parsed = urlsplit(uri)
+    query = parse_qsl(parsed.query, keep_blank_values=True)
+    query.extend(params.items())
+    return urlunsplit((parsed.scheme, parsed.netloc, parsed.path, urlencode(query), ""))
+
+
+def _oauth_error(error: str, description: str, status_code: int) -> JSONResponse:
+    return JSONResponse(
+        status_code=status_code,
+        content={"error": error, "error_description": description},
+        headers=NO_STORE_HEADERS,
+    )
+
+
+async def _current_user(
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+    db: AsyncSession = Depends(get_db),
+) -> User:
+    principal = await resolve_access_principal(
+        credentials.credentials if credentials else None,
+        db,
+    )
+    user = principal.user
+    if not user.is_verified:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid authenticated user")
+    payload = principal.claims
+    authenticated_at = payload.get("auth_time") or payload.get("iat")
+    user._oidc_auth_time = datetime.fromtimestamp(authenticated_at, timezone.utc) if authenticated_at else datetime.now(timezone.utc)
+    return user
+
+
+async def _validate_redirect_target(
+    db: AsyncSession,
+    client_id: str,
+    redirect_uri: str,
+) -> Optional[OAuth2Client]:
+    try:
+        return await get_registered_client(db, client_id, redirect_uri)
+    except PKCEClientError:
+        return None
 
 
 @router.get("/authorize", response_model=None)
@@ -38,337 +86,129 @@ async def pkce_authorize_get(
     client_id: str,
     redirect_uri: str,
     code_challenge: str,
+    state: str,
     code_challenge_method: str = "S256",
     scope: Optional[str] = "read write",
-    state: Optional[str] = None
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+    db: AsyncSession = Depends(get_db),
 ):
-    """
-    PKCE Authorization Endpoint (GET)
-    OAuth 2.1 compliant authorization endpoint with PKCE support
-    """
+    client = await _validate_redirect_target(db, client_id, redirect_uri)
+    if client is None:
+        return _oauth_error("invalid_client", "Unknown client or redirect URI", status.HTTP_400_BAD_REQUEST)
+
+    if response_type != "code":
+        params = {
+            "error": "unsupported_response_type",
+            "error_description": "Only the authorization code response type is supported",
+            "state": state,
+        }
+        return RedirectResponse(_redirect_uri(redirect_uri, params), status_code=status.HTTP_302_FOUND)
+
     try:
-        # Validate required parameters
-        if response_type != "code":
-            error_params = {
-                "error": PKCEErrorTypes.UNSUPPORTED_GRANT_TYPE,
-                "error_description": "Only 'code' response type is supported",
-                "state": state
-            }
-            return RedirectResponse(
-                url=f"{redirect_uri}?{urlencode(error_params)}",
-                status_code=302
-            )
-        
-        # Create PKCE request model
-        pkce_request = PKCERequest(
+        authorization_request = PKCERequest(
+            response_type=response_type,
             client_id=client_id,
             redirect_uri=redirect_uri,
             scope=scope,
             state=state,
+            nonce=request.query_params.get("nonce"),
             code_challenge=code_challenge,
             code_challenge_method=code_challenge_method,
-            response_type=response_type
         )
-        
-        # Check if user is authenticated
-        authorization = request.headers.get("Authorization")
-        if not authorization:
-            # Redirect to login with return URL
-            login_url = f"/login?return_to={request.url}"
-            return RedirectResponse(url=login_url, status_code=302)
-        
-        # For demo, we'll assume user is authenticated
-        # In production, validate the authorization header
-        current_user = await get_current_user(authorization.replace("Bearer ", ""))
-        if not current_user:
-            login_url = f"/login?return_to={request.url}"
-            return RedirectResponse(url=login_url, status_code=302)
-        
-        # Execute PKCE authorization workflow
-        client = await get_temporal_client()
-        
-        workflow_id = f"pkce-auth-{client_id}-{current_user.id}-{temporal_client.uuid4()}"
-        
-        try:
-            result = await client.execute_workflow(
-                "PKCEAuthorizationWorkflow",
-                args=[pkce_request.dict(), current_user.id],
-                id=workflow_id,
-                task_queue="oauth2-task-queue",
-                execution_timeout=timedelta(minutes=5),
-                retry_policy=RetryPolicy(maximum_attempts=2)
-            )
-            
-            if result.get("success"):
-                # Successful authorization - redirect with code
-                response_params = {
-                    "code": result["code"],
-                    "state": state
-                } if state else {"code": result["code"]}
-                
-                return RedirectResponse(
-                    url=f"{redirect_uri}?{urlencode(response_params)}",
-                    status_code=302
-                )
-            else:
-                # Authorization failed - redirect with error
-                error_params = {
-                    "error": result.get("error", PKCEErrorTypes.INVALID_REQUEST),
-                    "error_description": result.get("error_description", "Authorization failed"),
-                    "state": state
-                }
-                return RedirectResponse(
-                    url=f"{redirect_uri}?{urlencode(error_params)}",
-                    status_code=302
-                )
-                
-        except Exception as temporal_error:
-            logger.error(f"Temporal PKCE authorization failed: {str(temporal_error)}")
-            # Fallback error response
-            error_params = {
-                "error": PKCEErrorTypes.INVALID_REQUEST,
-                "error_description": "Authorization service temporarily unavailable",
-                "state": state
-            }
-            return RedirectResponse(
-                url=f"{redirect_uri}?{urlencode(error_params)}",
-                status_code=302
-            )
-            
-    except Exception as e:
-        logger.error(f"PKCE authorize endpoint error: {str(e)}")
-        error_params = {
-            "error": PKCEErrorTypes.INVALID_REQUEST,
-            "error_description": "Invalid authorization request",
-            "state": state
+    except ValidationError:
+        params = {
+            "error": "invalid_request",
+            "error_description": "A valid S256 challenge and state are required",
+            "state": state,
         }
+        return RedirectResponse(_redirect_uri(redirect_uri, params), status_code=status.HTTP_302_FOUND)
+
+    if credentials is None:
         return RedirectResponse(
-            url=f"{redirect_uri}?{urlencode(error_params)}",
-            status_code=302
+            f"/login?{urlencode({'return_to': str(request.url)})}",
+            status_code=status.HTTP_302_FOUND,
         )
 
+    try:
+        user = await _current_user(credentials, db)
+        code, _ = await issue_authorization_code(
+            db, authorization_request, user.id, getattr(user, "_oidc_auth_time", None)
+        )
+    except HTTPException:
+        return RedirectResponse(
+            f"/login?{urlencode({'return_to': str(request.url)})}",
+            status_code=status.HTTP_302_FOUND,
+        )
+    except PKCEClientError:
+        params = {"error": "invalid_scope", "error_description": "Requested scope is not allowed", "state": state}
+        return RedirectResponse(_redirect_uri(redirect_uri, params), status_code=status.HTTP_302_FOUND)
 
-@router.post("/authorize")
+    params = {"code": code, "state": state}
+    return RedirectResponse(_redirect_uri(redirect_uri, params), status_code=status.HTTP_302_FOUND)
+
+
+@router.post("/authorize", response_model=PKCEResponse)
 async def pkce_authorize_post(
-    pkce_request: PKCERequest,
-    current_user: User = Depends(get_current_user)
+    authorization_request: PKCERequest,
+    current_user: User = Depends(_current_user),
+    db: AsyncSession = Depends(get_db),
 ):
-    """
-    PKCE Authorization Endpoint (POST)
-    Programmatic PKCE authorization for API clients
-    """
     try:
-        logger.info(f"PKCE authorization request for client {pkce_request.client_id} by user {current_user.id}")
-        
-        # Execute PKCE authorization workflow
-        client = await get_temporal_client()
-        
-        workflow_id = f"pkce-auth-{pkce_request.client_id}-{current_user.id}-{temporal_client.uuid4()}"
-        
-        try:
-            result = await client.execute_workflow(
-                "PKCEAuthorizationWorkflow",
-                args=[pkce_request.dict(), current_user.id],
-                id=workflow_id,
-                task_queue="oauth2-task-queue",
-                execution_timeout=timedelta(minutes=5),
-                retry_policy=RetryPolicy(maximum_attempts=2)
-            )
-            
-            if result.get("success"):
-                return PKCEResponse(
-                    code=result["code"],
-                    state=pkce_request.state,
-                    expires_in=result.get("expires_in", 600)
-                )
-            else:
-                raise HTTPException(
-                    status_code=HTTP_400_BAD_REQUEST,
-                    detail={
-                        "error": result.get("error", PKCEErrorTypes.INVALID_REQUEST),
-                        "error_description": result.get("error_description", "Authorization failed")
-                    }
-                )
-                
-        except Exception as temporal_error:
-            logger.error(f"Temporal PKCE authorization failed: {str(temporal_error)}")
-            raise HTTPException(
-                status_code=HTTP_500_INTERNAL_SERVER_ERROR,
-                detail={
-                    "error": PKCEErrorTypes.INVALID_REQUEST,
-                    "error_description": "Authorization service temporarily unavailable"
-                }
-            )
-            
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"PKCE authorize POST endpoint error: {str(e)}")
-        raise HTTPException(
-            status_code=HTTP_400_BAD_REQUEST,
-            detail={
-                "error": PKCEErrorTypes.INVALID_REQUEST,
-                "error_description": "Invalid authorization request"
-            }
+        code, expires_in = await issue_authorization_code(
+            db,
+            authorization_request,
+            current_user.id,
+            getattr(current_user, "_oidc_auth_time", None),
         )
+    except PKCEClientError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"error": "invalid_request", "error_description": str(exc)},
+        ) from exc
+    return PKCEResponse(code=code, state=authorization_request.state, expires_in=expires_in)
 
 
-@router.post("/token")
-async def pkce_token_exchange(token_request: PKCETokenRequest):
-    """
-    PKCE Token Exchange Endpoint
-    Exchange authorization code + code verifier for access tokens
-    """
+@router.post("/token", response_model=PKCETokenResponse)
+async def pkce_token_exchange(
+    token_request: PKCETokenRequest,
+    db: AsyncSession = Depends(get_db),
+):
     try:
-        logger.info(f"PKCE token exchange request for client {token_request.client_id}")
-        
-        # Execute PKCE token exchange workflow
-        client = await get_temporal_client()
-        
-        workflow_id = f"pkce-token-{token_request.client_id}-{temporal_client.uuid4()}"
-        
-        try:
-            result = await client.execute_workflow(
-                "PKCETokenExchangeWorkflow",
-                args=[token_request.dict()],
-                id=workflow_id,
-                task_queue="oauth2-task-queue",
-                execution_timeout=timedelta(minutes=5),
-                retry_policy=RetryPolicy(maximum_attempts=2)
-            )
-            
-            if result.get("success"):
-                return PKCETokenResponse(
-                    access_token=result["access_token"],
-                    token_type=result.get("token_type", "Bearer"),
-                    expires_in=result.get("expires_in", 1800),
-                    refresh_token=result.get("refresh_token"),
-                    scope=result.get("scope")
-                )
-            else:
-                raise HTTPException(
-                    status_code=HTTP_400_BAD_REQUEST,
-                    detail={
-                        "error": result.get("error", PKCEErrorTypes.INVALID_GRANT),
-                        "error_description": result.get("error_description", "Token exchange failed")
-                    }
-                )
-                
-        except Exception as temporal_error:
-            logger.error(f"Temporal PKCE token exchange failed: {str(temporal_error)}")
-            raise HTTPException(
-                status_code=HTTP_500_INTERNAL_SERVER_ERROR,
-                detail={
-                    "error": PKCEErrorTypes.INVALID_REQUEST,
-                    "error_description": "Token service temporarily unavailable"
-                }
-            )
-            
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"PKCE token exchange endpoint error: {str(e)}")
-        raise HTTPException(
-            status_code=HTTP_400_BAD_REQUEST,
-            detail={
-                "error": PKCEErrorTypes.INVALID_REQUEST,
-                "error_description": "Invalid token request"
-            }
-        )
+        token_data = await redeem_authorization_code(db, token_request)
+    except PKCEClientError:
+        return _oauth_error("invalid_client", "Client authentication failed", status.HTTP_401_UNAUTHORIZED)
+    except PKCEGrantError:
+        return _oauth_error("invalid_grant", "Authorization grant is invalid", status.HTTP_400_BAD_REQUEST)
+    except Exception:
+        logger.exception("PKCE token exchange failed")
+        return _oauth_error("server_error", "Token service unavailable", status.HTTP_503_SERVICE_UNAVAILABLE)
+
+    return JSONResponse(content=token_data, headers=NO_STORE_HEADERS)
 
 
 @router.get("/client-config")
-async def get_pkce_client_config(client_id: str):
-    """
-    Get PKCE client configuration
-    Helps clients understand supported features
-    """
-    try:
-        # Demo client configurations
-        demo_configs = {
-            "demo-client": {
-                "client_id": "demo-client",
-                "pkce_methods": ["S256", "plain"],
-                "recommended_method": "S256",
-                "token_endpoint_auth_methods": ["none"],  # Public client
-                "grant_types": ["authorization_code"],
-                "response_types": ["code"],
-                "redirect_uris": [
-                    "http://localhost:3000/callback",
-                    "https://yourdomain.com/callback"
-                ]
-            },
-            "mobile-app": {
-                "client_id": "mobile-app",
-                "pkce_methods": ["S256"],
-                "recommended_method": "S256",
-                "token_endpoint_auth_methods": ["none"],  # Public client
-                "grant_types": ["authorization_code"],
-                "response_types": ["code"],
-                "redirect_uris": [
-                    "com.yourapp.oauth://callback"
-                ]
-            }
-        }
-        
-        if client_id not in demo_configs:
-            raise HTTPException(
-                status_code=HTTP_400_BAD_REQUEST,
-                detail={
-                    "error": PKCEErrorTypes.INVALID_CLIENT,
-                    "error_description": "Unknown client_id"
-                }
-            )
-        
-        return demo_configs[client_id]
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Get PKCE client config error: {str(e)}")
-        raise HTTPException(
-            status_code=HTTP_500_INTERNAL_SERVER_ERROR,
-            detail={
-                "error": PKCEErrorTypes.INVALID_REQUEST,
-                "error_description": "Configuration service error"
-            }
-        )
+async def get_pkce_client_config(
+    client_id: str,
+    db: AsyncSession = Depends(get_db),
+):
+    from sqlalchemy import select
 
-
-@router.post("/generate-challenge")
-async def generate_pkce_challenge(method: str = "S256"):
-    """
-    Helper endpoint to generate PKCE challenge for testing
-    In production, clients should generate this themselves
-    """
-    try:
-        if method not in ["S256", "plain"]:
-            raise HTTPException(
-                status_code=HTTP_400_BAD_REQUEST,
-                detail={
-                    "error": "invalid_request",
-                    "error_description": "Code challenge method must be S256 or plain"
-                }
-            )
-        
-        code_verifier = PKCEUtils.generate_code_verifier()
-        code_challenge = PKCEUtils.generate_code_challenge(code_verifier, method)
-        
-        return {
-            "code_verifier": code_verifier,
-            "code_challenge": code_challenge,
-            "code_challenge_method": method,
-            "note": "Store code_verifier securely - it's needed for token exchange"
-        }
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Generate PKCE challenge error: {str(e)}")
-        raise HTTPException(
-            status_code=HTTP_500_INTERNAL_SERVER_ERROR,
-            detail={
-                "error": "server_error",
-                "error_description": "Challenge generation failed"
-            }
+    result = await db.execute(
+        select(OAuth2Client).where(
+            OAuth2Client.client_id == client_id,
+            OAuth2Client.is_active.is_(True),
         )
+    )
+    client = result.scalar_one_or_none()
+    if client is None:
+        return _oauth_error("invalid_client", "Unknown client", status.HTTP_400_BAD_REQUEST)
+
+    return {
+        "client_id": client.client_id,
+        "pkce_methods": ["S256"],
+        "token_endpoint_auth_methods": ["client_secret_post"] if client.is_confidential else ["none"],
+        "grant_types": client.grant_types,
+        "response_types": client.response_types,
+        "redirect_uris": client.redirect_uris,
+        "scope": client.scope,
+    }

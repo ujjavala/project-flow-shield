@@ -10,11 +10,34 @@ from fastapi.testclient import TestClient
 
 from app.main import app
 from app.api.admin_analytics import add_fraud_event, add_ai_metric
+from app.utils.admin_auth import get_admin_user, get_super_admin_user
 
 client = TestClient(app)
 
 class TestAdminAnalytics:
     """Test admin analytics endpoints"""
+
+    @pytest.fixture(autouse=True)
+    def authenticated_admin(self):
+        admin = MagicMock(id="admin-1", is_superuser=True, role="admin")
+        app.dependency_overrides[get_admin_user] = lambda: admin
+        app.dependency_overrides[get_super_admin_user] = lambda: admin
+        allowed = {
+            "allowed": True,
+            "remaining": 99,
+            "reset_time": "2099-01-01T00:00:00+00:00",
+            "current_count": 1,
+            "limit": 100,
+            "retry_after": None,
+            "blocked_reason": None,
+        }
+        with patch(
+            "app.middleware.security.rate_limiter.check",
+            new=AsyncMock(return_value=allowed),
+        ):
+            yield
+        app.dependency_overrides.pop(get_admin_user, None)
+        app.dependency_overrides.pop(get_super_admin_user, None)
     
     def setup_method(self):
         """Setup test data"""

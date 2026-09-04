@@ -82,7 +82,7 @@ export function buildAuthorizationUrl({
   scope = 'read write',
   state = null
 }) {
-  const baseUrl = `${process.env.REACT_APP_API_URL || 'http://localhost:8000'}/oauth2/pkce/authorize`;
+  const baseUrl = `${import.meta.env.VITE_API_URL || ''}/oauth2/pkce/authorize`;
   
   const params = new URLSearchParams({
     response_type: 'code',
@@ -115,7 +115,7 @@ export async function exchangeCodeForTokens({
   clientId,
   redirectUri
 }) {
-  const tokenUrl = `${process.env.REACT_APP_API_URL || 'http://localhost:8000'}/oauth2/pkce/token`;
+  const tokenUrl = `${import.meta.env.VITE_API_URL || ''}/oauth2/pkce/token`;
   
   const response = await fetch(tokenUrl, {
     method: 'POST',
@@ -134,7 +134,8 @@ export async function exchangeCodeForTokens({
   const data = await response.json();
   
   if (!response.ok) {
-    throw new Error(data.error_description || `Token exchange failed: ${data.error}`);
+    const oauthError = data.detail || data;
+    throw new Error(oauthError.error_description || `Token exchange failed: ${oauthError.error || response.status}`);
   }
   
   return data;
@@ -149,7 +150,7 @@ export class PKCEAuthFlow {
     this.clientId = config.clientId || 'demo-client';
     this.redirectUri = config.redirectUri || `${window.location.origin}/callback`;
     this.scope = config.scope || 'read write';
-    this.storage = config.useSessionStorage ? sessionStorage : localStorage;
+    this.storage = config.storage || sessionStorage;
     this.storagePrefix = 'pkce_';
   }
 
@@ -255,6 +256,10 @@ export class PKCEAuthFlow {
       if (!pkceParams) {
         throw new Error('Invalid or expired authorization state');
       }
+
+      // Consume state before exchanging the code so concurrent callbacks cannot
+      // reuse the same verifier. A failed exchange must start a new flow.
+      this.clearPKCEParams(state);
       
       // Exchange code for tokens
       const tokenResponse = await exchangeCodeForTokens({
@@ -263,9 +268,6 @@ export class PKCEAuthFlow {
         clientId: this.clientId,
         redirectUri: this.redirectUri
       });
-      
-      // Clear stored parameters
-      this.clearPKCEParams(state);
       
       return tokenResponse;
     } catch (error) {
@@ -309,8 +311,7 @@ export class PKCEAuthFlow {
  */
 export const pkceAuth = new PKCEAuthFlow({
   clientId: 'demo-client',
-  redirectUri: `${window.location.origin}/callback`,
-  useSessionStorage: false
+  redirectUri: `${window.location.origin}/callback`
 });
 
 /**

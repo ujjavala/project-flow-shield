@@ -8,7 +8,7 @@ class OAuth2Client(Base):
     
     id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
     client_id = Column(String(255), unique=True, nullable=False, index=True)
-    client_secret = Column(String(255), nullable=False)
+    client_secret = Column(String(255), nullable=True)
     client_name = Column(String(255), nullable=False)
     
     # Client configuration
@@ -45,6 +45,8 @@ class OAuth2AuthorizationCode(Base):
     redirect_uri = Column(String(255), nullable=False)
     scope = Column(String(255), nullable=True)
     state = Column(String(255), nullable=True)
+    nonce = Column(String(512), nullable=True)
+    auth_time = Column(DateTime(timezone=True), nullable=True)
     
     # Code challenge for PKCE
     code_challenge = Column(String(255), nullable=True)
@@ -63,7 +65,7 @@ class OAuth2AccessToken(Base):
     
     id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
     access_token = Column(String(255), unique=True, nullable=False, index=True)
-    refresh_token = Column(String(255), nullable=True, index=True)
+    refresh_token_hash = Column(String(64), nullable=True, index=True)
     client_id = Column(String(255), nullable=False, index=True)
     user_id = Column(String, nullable=False, index=True)
     

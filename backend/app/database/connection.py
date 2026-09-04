@@ -27,6 +27,14 @@ async def init_db():
     try:
         from app.models.user import User, RefreshToken
         from app.models.oauth import OAuth2Client, OAuth2AuthorizationCode, OAuth2AccessToken
+        from app.models.iam import (
+            IAMAccessEvaluation, IAMAuditLog, IAMContextualRole, IAMOperationEffect,
+            IAMPermission, IAMPolicy, IAMResource, IAMRole, IAMRoleRequest, IAMScope,
+            IAMSession,
+        )
+        from app.models.auth_security import AuthChallenge, AuthSession, PasskeyCredential, TOTPRecoveryCode
+        from app.models.risk_policy import RiskDecision, RiskPolicy
+        from app.models.security_lab import SecuritySimulationRun
         
         async with engine.begin() as conn:
             # Create all tables
@@ -53,23 +61,41 @@ async def create_default_oauth_client():
             result = await session.execute(stmt)
             existing_client = result.scalar_one_or_none()
             
+            client_secret = (
+                hash_password(settings.OAUTH2_CLIENT_SECRET)
+                if settings.OAUTH2_CLIENT_CONFIDENTIAL and settings.OAUTH2_CLIENT_SECRET
+                else None
+            )
+            redirect_uris = [settings.OAUTH2_REDIRECT_URI, f"{settings.FRONTEND_URL}/callback"]
+
             if not existing_client:
                 default_client = OAuth2Client(
                     client_id=settings.OAUTH2_CLIENT_ID,
-                    client_secret=hash_password(settings.OAUTH2_CLIENT_SECRET),
-                    client_name="OAuth2 Auth Default Client",
-                    redirect_uris=[settings.OAUTH2_REDIRECT_URI, f"{settings.FRONTEND_URL}/callback"],
+                    client_secret=client_secret,
+                    client_name="FlowShield Local Demo Client",
+                    redirect_uris=redirect_uris,
                     grant_types=["authorization_code", "refresh_token"],
                     response_types=["code"],
-                    scope="read write profile email",
-                    description="Default OAuth2 client for the authentication service"
+                    scope="openid read write profile email",
+                    description="Deterministic local OAuth 2.1/OIDC PKCE demo client",
+                    is_confidential=settings.OAUTH2_CLIENT_CONFIDENTIAL,
                 )
                 
                 session.add(default_client)
                 await session.commit()
                 logger.info("Default OAuth2 client created")
             else:
-                logger.info("Default OAuth2 client already exists")
+                existing_client.client_name = "FlowShield Local Demo Client"
+                existing_client.client_secret = client_secret
+                existing_client.redirect_uris = redirect_uris
+                existing_client.grant_types = ["authorization_code", "refresh_token"]
+                existing_client.response_types = ["code"]
+                existing_client.scope = "openid read write profile email"
+                existing_client.description = "Deterministic local OAuth 2.1/OIDC PKCE demo client"
+                existing_client.is_confidential = settings.OAUTH2_CLIENT_CONFIDENTIAL
+                existing_client.is_active = True
+                await session.commit()
+                logger.info("Default OAuth2 client reconciled")
                 
     except Exception as e:
         logger.error(f"Failed to create default OAuth2 client: {e}")

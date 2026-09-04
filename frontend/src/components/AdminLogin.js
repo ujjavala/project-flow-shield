@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { FiEye, FiEyeOff, FiChevronDown, FiShield, FiLock, FiSettings, FiUsers, FiBarChart2, FiMonitor, FiAlertTriangle, FiDatabase, FiZap } from 'react-icons/fi';
+import { Check, Eye as FiEye, EyeOff as FiEyeOff, Shield as FiShield, Lock as FiLock, Settings as FiSettings, Zap as FiZap } from 'lucide-react';
 import FlowShieldLogo from './common/FlowShieldLogo';
+import { useAuth } from '../context/AuthContext';
 import './AdminLogin.css';
 
 const AdminLogin = () => {
@@ -15,6 +16,7 @@ const AdminLogin = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [featuresExpanded, setFeaturesExpanded] = useState(false);
   const navigate = useNavigate();
+  const { loginAdmin } = useAuth();
 
   const handleInputChange = (e) => {
     const { name, value, type, checked } = e.target;
@@ -29,33 +31,16 @@ const AdminLogin = () => {
     setIsLoading(true);
 
     try {
-      const response = await fetch('http://localhost:8000/admin/auth/login', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(formData)
-      });
-
-      const data = await response.json();
-
-      if (response.ok) {
-        // Store admin token with different key
-        localStorage.setItem('admin_token', data.access_token);
-        localStorage.setItem('admin_refresh_token', data.refresh_token);
-        localStorage.setItem('admin_role', data.admin_role);
-        localStorage.setItem('admin_permissions', JSON.stringify(data.permissions));
-
-        toast.success(`Welcome, Admin! (${data.admin_role})`);
-
-        // Navigate to admin dashboard
-        navigate('/admin');
-      } else {
-        toast.error(data.detail || 'Admin login failed');
-      }
+      const data = await loginAdmin(formData.email, formData.password, formData.remember_me);
+      toast.success(`Welcome, Admin! (${data.user.role})`);
+      navigate('/admin');
     } catch (error) {
       console.error('Admin login error:', error);
-      toast.error('Network error. Please check if the backend is running.');
+      toast.error(
+        error.status
+          ? error.message || 'Admin login failed'
+          : 'Network error. Please check if the backend is running.'
+      );
     } finally {
       setIsLoading(false);
     }
@@ -124,7 +109,9 @@ const AdminLogin = () => {
                 checked={formData.remember_me}
                 onChange={handleInputChange}
               />
-              <span className="checkbox-custom"></span>
+              <span className="checkbox-custom" aria-hidden="true">
+                <Check />
+              </span>
               <span className="checkbox-text">Remember this admin session</span>
             </label>
           </div>

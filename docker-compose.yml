@@ -1,163 +1,304 @@
-version: '3.8'
+name: flowshield-local
+
+x-backend-environment: &backend-environment
+  ENVIRONMENT: local
+  SERVICE_NAME: flowshield-api
+  DATABASE_URL: postgresql://flowshield:flowshield-local-only@postgres:5432/flowshield
+  REDIS_URL: redis://redis:6379/1
+  TEMPORAL_HOST: temporal:7233
+  TEMPORAL_NAMESPACE: default
+  TEMPORAL_TASK_QUEUE: oauth2-task-queue
+  TEMPORAL_IDENTITY_OPS_TASK_QUEUE: flowshield-identity-ops-v1
+  JWT_SECRET_KEY: ${JWT_SECRET_KEY:-local-only-not-for-production-change-me-32-bytes}
+  JWT_ALGORITHM: HS256
+  OAUTH2_CLIENT_ID: flowshield-local
+  OAUTH2_CLIENT_SECRET: ""
+  OAUTH2_CLIENT_CONFIDENTIAL: "false"
+  OAUTH2_REDIRECT_URI: http://localhost:3000/callback
+  OIDC_ISSUER: ${OIDC_ISSUER:-http://localhost:8000}
+  OIDC_SIGNING_KEY_PATH: /run/oidc/signing-key.pem
+  OIDC_ACTIVE_KEY_ID: local-dev-1
+  OIDC_PUBLIC_KEY_PATHS: '{"local-dev-1":"/run/oidc/signing-public.pem"}'
+  FRONTEND_URL: http://localhost:3000
+  BACKEND_URL: http://localhost:8000
+  ALLOWED_ORIGINS: '["http://localhost:3000","http://127.0.0.1:3000"]'
+  EMAIL_DELIVERY_MODE: smtp
+  SMTP_SERVER: mailpit
+  SMTP_PORT: "1025"
+  SMTP_START_TLS: "false"
+  EMAIL_FROM: noreply@flowshield.local
+  EMAIL_FROM_NAME: FlowShield Local Demo
+  SECURITY_LAB_ENABLED: "true"
+  SECURITY_LAB_BASE_URL: http://backend:8000
+  SECURITY_LAB_ALLOWED_BASE_URLS: '["http://backend:8000"]'
+  RISK_POLICY_AI_SHADOW_ENABLED: ${RISK_POLICY_AI_SHADOW_ENABLED:-false}
+  RISK_POLICY_AI_HOST: ollama
+  RISK_POLICY_AI_PORT: "11434"
+  PRIVILEGED_ACCESS_AGENT_AI_ENABLED: ${PRIVILEGED_ACCESS_AGENT_AI_ENABLED:-false}
+  DEMO_CREDENTIALS_PATH: /run/demo-credentials/users.json
+  OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+  OTEL_EXPORTER_OTLP_INSECURE: "true"
+
+x-backend-service: &backend-service
+  build:
+    context: ./backend
+    dockerfile: Dockerfile
+  environment: *backend-environment
+  networks: [platform]
+  restart: unless-stopped
+  volumes:
+    - oidc_keys:/run/oidc:ro
 
 services:
-  # PostgreSQL Database
   postgres:
-    image: postgres:15
-    container_name: oauth2_postgres
+    image: postgres:15.8-alpine
     environment:
-      POSTGRES_DB: oauth2_auth
-      POSTGRES_USER: oauth2_user
-      POSTGRES_PASSWORD: oauth2_password
+      POSTGRES_DB: flowshield
+      POSTGRES_USER: flowshield
+      POSTGRES_PASSWORD: flowshield-local-only
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./backend/app/database/init.sql:/docker-entrypoint-initdb.d/init.sql
-    ports:
-      - "5432:5432"
-    networks:
-      - oauth2_network
+      - ./backend/app/database/init.sql:/docker-entrypoint-initdb.d/10-init.sql:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U oauth2_user -d oauth2_auth"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
+      test: ["CMD-SHELL", "pg_isready -U flowshield -d flowshield"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    networks: [platform]
+    restart: unless-stopped
 
-  # Temporal Server
+  redis:
+    image: redis:7.4.1-alpine
+    command: ["redis-server", "--appendonly", "yes", "--save", "60", "1"]
+    volumes: ["redis_data:/data"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    networks: [platform]
+    restart: unless-stopped
+
   temporal:
     image: temporalio/auto-setup:1.22.6
-    container_name: oauth2_temporal
+    environment:
+      DB: postgres12
+      DB_PORT: "5432"
+      POSTGRES_USER: flowshield
+      POSTGRES_PWD: flowshield-local-only
+      POSTGRES_SEEDS: postgres
+    ports: ["127.0.0.1:7233:7233"]
     depends_on:
       postgres:
         condition: service_healthy
-    environment:
-      - DB=postgresql
-      - DB_PORT=5432
-      - POSTGRES_USER=oauth2_user
-      - POSTGRES_PWD=oauth2_password
-      - POSTGRES_SEEDS=postgres
-      - ENABLE_ES=false
-      - SKIP_SCHEMA_SETUP=false
-    ports:
-      - "7233:7233"
-    networks:
-      - oauth2_network
     healthcheck:
       test: ["CMD", "tctl", "--address", "temporal:7233", "cluster", "health"]
       interval: 10s
       timeout: 5s
-      retries: 10
+      retries: 30
       start_period: 30s
+    networks: [platform]
+    restart: unless-stopped
 
-  # Redis Cache
-  redis:
-    image: redis:7-alpine
-    container_name: oauth2_redis
-    ports:
-      - "6379:6379"
-    networks:
-      - oauth2_network
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
+  temporal-ui:
+    image: temporalio/ui:2.35.0
+    environment:
+      TEMPORAL_ADDRESS: temporal:7233
+      TEMPORAL_CORS_ORIGINS: http://localhost:3000
+    ports: ["127.0.0.1:8081:8080"]
+    depends_on:
+      temporal:
+        condition: service_healthy
+    networks: [platform]
+    restart: unless-stopped
 
-  # Backend API
-  backend:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
-    container_name: oauth2_backend
+  oidc-keygen:
+    <<: *backend-service
+    command: ["python", "-m", "app.database.generate_dev_oidc_keys"]
+    environment:
+      OIDC_KEY_DIRECTORY: /run/oidc
+    restart: "no"
+    volumes:
+      - oidc_keys:/run/oidc
+
+  demo-credentials-init:
+    <<: *backend-service
+    user: root
+    command: ["sh", "-ec", "chown 1000:1000 /run/demo-credentials && chmod 0700 /run/demo-credentials"]
+    restart: "no"
+    volumes:
+      - demo_credentials:/run/demo-credentials
+
+  migrate:
+    <<: *backend-service
+    command:
+      - sh
+      - -ec
+      - >-
+        python -m app.database.schema &&
+        psql "$${DATABASE_URL}" -v ON_ERROR_STOP=1 -f app/database/migrate.sql &&
+        python -m app.database.seed
     depends_on:
       postgres:
         condition: service_healthy
+      oidc-keygen:
+        condition: service_completed_successfully
+      demo-credentials-init:
+        condition: service_completed_successfully
+    restart: "no"
+    volumes:
+      - oidc_keys:/run/oidc:ro
+      - demo_credentials:/run/demo-credentials
+
+  backend:
+    <<: *backend-service
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+    ports: ["127.0.0.1:${BACKEND_PORT:-8000}:8000"]
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      temporal:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health/ready', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 20s
+
+  worker:
+    <<: *backend-service
+    command: ["python", "worker.py"]
+    environment:
+      <<: *backend-environment
+      SERVICE_NAME: flowshield-temporal-worker
+      TEMPORAL_WORKER_MODE: general
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
       temporal:
         condition: service_healthy
       redis:
         condition: service_healthy
-    environment:
-      - DATABASE_URL=postgresql://oauth2_user:oauth2_password@postgres:5432/oauth2_auth
-      - TEMPORAL_HOST=temporal:7233
-      - JWT_SECRET_KEY=your-super-secret-jwt-key-change-in-production
-      - JWT_ALGORITHM=HS256
-      - JWT_ACCESS_TOKEN_EXPIRE_MINUTES=30
-      - JWT_REFRESH_TOKEN_EXPIRE_DAYS=7
-      - SMTP_SERVER=smtp.gmail.com
-      - SMTP_PORT=587
-      - SMTP_USERNAME=your-email@gmail.com
-      - SMTP_PASSWORD=your-app-password
-      - FRONTEND_URL=http://localhost:3000
-      - BACKEND_URL=http://localhost:8000
-    ports:
-      - "8000:8000"
-    volumes:
-      - ./backend:/app
-    networks:
-      - oauth2_network
-    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
 
-  # Temporal Worker
-  worker:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
-    container_name: oauth2_worker
+  identity-worker:
+    <<: *backend-service
+    command: ["python", "worker.py"]
+    environment:
+      <<: *backend-environment
+      SERVICE_NAME: flowshield-identity-worker
+      TEMPORAL_WORKER_MODE: identity
     depends_on:
-      postgres:
-        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
       temporal:
         condition: service_healthy
-    environment:
-      - DATABASE_URL=postgresql://oauth2_user:oauth2_password@postgres:5432/oauth2_auth
-      - TEMPORAL_HOST=temporal:7233
-      - SMTP_SERVER=smtp.gmail.com
-      - SMTP_PORT=587
-      - SMTP_USERNAME=your-email@gmail.com
-      - SMTP_PASSWORD=your-app-password
-      - FRONTEND_URL=http://localhost:3000
-    volumes:
-      - ./backend:/app
-    networks:
-      - oauth2_network
-    command: ["python", "worker.py"]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import socket; socket.create_connection(('temporal', 7233), 3).close()"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
 
-  # Frontend React App
   frontend:
     build:
       context: ./frontend
       dockerfile: Dockerfile
-    container_name: oauth2_frontend
+      args:
+        VITE_API_URL: ""
+        VITE_TEMPORAL_UI_URL: http://localhost:8081
+        VITE_CLIENT_ID: flowshield-local
+        VITE_AI_ENABLED: ${VITE_AI_ENABLED:-false}
+    ports: ["127.0.0.1:3000:3000"]
     depends_on:
-      - backend
-    environment:
-      - REACT_APP_API_URL=http://localhost:8000
-      - REACT_APP_CLIENT_ID=oauth2-client
-    ports:
-      - "3000:3000"
-    volumes:
-      - ./frontend:/app
-      - /app/node_modules
-    networks:
-      - oauth2_network
-    command: ["npm", "start"]
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:3000/ || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+    networks: [platform]
+    restart: unless-stopped
 
-  # Temporal Web UI
-  temporal-ui:
-    image: temporalio/ui:2.35.0
-    container_name: oauth2_temporal_ui
-    depends_on:
-      - temporal
+  mailpit:
+    image: axllent/mailpit:v1.22.3
+    ports: ["127.0.0.1:8025:8025", "127.0.0.1:1025:1025"]
+    healthcheck:
+      test: ["CMD", "/mailpit", "readyz"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+    networks: [platform]
+    restart: unless-stopped
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.117.0
+    command: ["--config=/etc/otelcol-contrib/config.yaml"]
+    volumes: ["./observability/otel-collector.yml:/etc/otelcol-contrib/config.yaml:ro"]
+    ports: ["127.0.0.1:4317:4317", "127.0.0.1:4318:4318", "127.0.0.1:8889:8889"]
+    networks: [platform]
+    restart: unless-stopped
+
+  prometheus:
+    image: prom/prometheus:v3.1.0
+    command: ["--config.file=/etc/prometheus/prometheus.yml", "--storage.tsdb.retention.time=3d"]
+    volumes:
+      - ./observability/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    ports: ["127.0.0.1:9090:9090"]
+    depends_on: [otel-collector, backend]
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:9090/-/ready"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+    networks: [platform]
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:11.5.1
     environment:
-      - TEMPORAL_ADDRESS=temporal:7233
-      - TEMPORAL_CORS_ORIGINS=http://localhost:3000
-    ports:
-      - "8081:8080"
-    networks:
-      - oauth2_network
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-flowshield-local-only}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./observability/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./observability/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    ports: ["127.0.0.1:3001:3000"]
+    depends_on:
+      prometheus:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://localhost:3000/api/health || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+    networks: [platform]
+    restart: unless-stopped
+
+  ollama:
+    image: ollama/ollama:0.5.7
+    profiles: [ai]
+    ports: ["127.0.0.1:11434:11434"]
+    volumes: ["ollama_data:/root/.ollama"]
+    networks: [platform]
+    restart: unless-stopped
 
 networks:
-  oauth2_network:
+  platform:
     driver: bridge
 
 volumes:
   postgres_data:
+  redis_data:
+  oidc_keys:
+  demo_credentials:
+  prometheus_data:
+  grafana_data:
+  ollama_data:

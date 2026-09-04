@@ -7,6 +7,10 @@ from app.temporal.workflows.user_login import UserLoginWorkflow
 from app.temporal.types import LoginRequest
 from app.temporal.activities.auth import AuthActivities
 
+pytestmark = pytest.mark.skip(
+    reason="Legacy credential-bearing login workflow is intentionally excluded from worker registration"
+)
+
 
 class TestUserLoginWorkflow:
     

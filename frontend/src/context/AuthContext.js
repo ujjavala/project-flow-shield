@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { authService } from '../services/auth';
+import { bffAuth } from '../services/bffService';
 import toast from 'react-hot-toast';
 
 export const AuthContext = createContext();
@@ -23,10 +24,12 @@ export const AuthProvider = ({ children }) => {
 
   const checkAuthStatus = async () => {
     try {
-      const token = authService.getAccessToken();
-      if (token) {
+      const status = await authService.getSessionStatus();
+      if (status.authenticated) {
         const userData = await authService.getCurrentUser();
         setUser(userData);
+      } else {
+        setUser(null);
       }
     } catch (error) {
       console.error('Auth check failed:', error.message || error);
@@ -35,11 +38,7 @@ export const AuthProvider = ({ children }) => {
         setBackendOnline(false);
         console.warn("Backend is offline.");
       }
-      if (error.message === 'No valid access token') {
-        authService.logout(); // expected
-      } else {
-        console.warn('Backend might be down. Continuing in offline mode.');
-      }
+      console.warn('Backend might be down. Continuing in offline mode.');
     } finally {
       setLoading(false);
     }
@@ -69,8 +68,14 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  const logout = () => {
-    authService.logout();
+  const loginAdmin = async (email, password, rememberMe = false) => {
+    const response = await bffAuth.login(email, password, 'admin', rememberMe);
+    setUser(response.user);
+    return response;
+  };
+
+  const logout = async () => {
+    await authService.logout();
     setUser(null);
     toast.success('Logged out successfully');
   };
@@ -120,6 +125,7 @@ export const AuthProvider = ({ children }) => {
     loading,
     backendOnline,
     login,
+    loginAdmin,
     register,
     logout,
     requestPasswordReset,

@@ -4,6 +4,7 @@ Comprehensive role and permission management endpoints with scope support
 """
 
 import logging
+import uuid
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Any
 from fastapi import APIRouter, HTTPException, Depends, Query, status
@@ -16,7 +17,7 @@ from app.database.connection import get_db
 from app.models.user import User
 from app.models.iam import (
     IAMRole, IAMPermission, IAMScope, IAMResource,
-    IAMRoleRequest, IAMSession, IAMAuditLog,
+    IAMRoleRequest, IAMOperationEffect, IAMSession, IAMAuditLog,
     user_roles_table, role_permissions_table
 )
 from app.utils.iam_decorators import (
@@ -24,11 +25,20 @@ from app.utils.iam_decorators import (
     require_any_permission, require_admin
 )
 from app.services.iam_service import get_iam_service
+from app.config import settings
+from app.temporal.client import get_temporal_client
+from app.temporal.privileged_access_types import ApprovalDecision, PrivilegedAccessRequest
+from app.temporal.workflows.privileged_access import PrivilegedAccessWorkflow
 
 logger = logging.getLogger(__name__)
 
 # Create API router
 router = APIRouter(prefix="/iam", tags=["IAM Management"])
+
+
+def _internal_error(operation: str, exc: Exception) -> HTTPException:
+    logger.error("IAM operation failed operation=%s exception_type=%s", operation, type(exc).__name__)
+    return HTTPException(status_code=500, detail="IAM service operation failed")
 
 # ===== REQUEST/RESPONSE MODELS =====
 
@@ -59,11 +69,22 @@ class CreateScopeRequest(BaseModel):
     is_inheritable: bool = Field(default=True, description="Can inherit permissions")
 
 class AssignRoleRequest(BaseModel):
-    user_id: str = Field(..., description="User ID")
     role_id: str = Field(..., description="Role ID")
     scope_id: Optional[str] = Field(None, description="Scope ID")
     expires_at: Optional[str] = Field(None, description="Expiration date (ISO format)")
     justification: Optional[str] = Field(None, description="Assignment justification")
+
+
+class PrivilegedAccessCreateRequest(BaseModel):
+    role_id: str
+    scope_id: Optional[str] = None
+    duration_seconds: int = Field(ge=60, le=2_592_000)
+    justification: str = Field(min_length=10, max_length=2000)
+
+
+class PrivilegedAccessDecisionRequest(BaseModel):
+    approved: bool
+    reason: Optional[str] = Field(default=None, max_length=1000)
 
 class UpdateRolePermissionsRequest(BaseModel):
     role_id: str = Field(..., description="Role ID")
@@ -113,6 +134,27 @@ class UserRoleResponse(BaseModel):
     scopes: List[Dict[str, Any]]
     permissions_summary: Dict[str, Any]
 
+
+async def _require_scope_access(iam_context: IAMContext, scope_id: Optional[str]) -> None:
+    """Reject cross-scope IAM mutations unless the actor is a superuser."""
+    if iam_context.user.is_superuser:
+        return
+    if not scope_id or scope_id == "global":
+        raise HTTPException(status_code=403, detail="Global IAM changes require a superuser")
+    accessible = await iam_context.iam_service.get_user_accessible_scopes(iam_context.user.id)
+    if scope_id not in {scope["id"] for scope in accessible}:
+        raise HTTPException(status_code=403, detail="IAM change is outside the actor's accessible scopes")
+
+
+def _require_role_grant_access(iam_context: IAMContext, role: IAMRole) -> None:
+    """Prevent privilege escalation through grants at or above the actor's level."""
+    if iam_context.user.is_superuser:
+        return
+    actor_roles = [actor_role for actor_role in getattr(iam_context.user, "iam_roles", []) if actor_role.is_active]
+    actor_max_priority = max((actor_role.priority for actor_role in actor_roles), default=-1)
+    if role.priority >= actor_max_priority:
+        raise HTTPException(status_code=403, detail="Cannot grant a role at or above your privilege level")
+
 # ===== ROLE MANAGEMENT ENDPOINTS =====
 
 @router.get("/roles", response_model=List[RoleResponse])
@@ -161,9 +203,8 @@ async def list_roles(
 
         return role_responses
 
-    except Exception as e:
-        logger.error(f"Failed to list roles: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    except Exception as exc:
+        raise _internal_error("list_roles", exc) from exc
 
 @router.post("/roles", response_model=RoleResponse)
 @require_permission("iam.roles.create")
@@ -175,6 +216,10 @@ async def create_role(
 
     try:
         db = iam_context.db
+
+        await _require_scope_access(iam_context, request.scope)
+        if request.is_system_role and not iam_context.user.is_superuser:
+            raise HTTPException(status_code=403, detail="Only a superuser can create system roles")
 
         # Check if role name already exists
         existing_query = select(IAMRole).where(IAMRole.name == request.name)
@@ -234,9 +279,8 @@ async def create_role(
 
     except HTTPException:
         raise
-    except Exception as e:
-        logger.error(f"Failed to create role: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    except Exception as exc:
+        raise _internal_error("create_role", exc) from exc
 
 @router.get("/roles/{role_id}", response_model=Dict[str, Any])
 @require_permission("iam.roles.read")
@@ -308,9 +352,8 @@ async def get_role_details(
 
     except HTTPException:
         raise
-    except Exception as e:
-        logger.error(f"Failed to get role details: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    except Exception as exc:
+        raise _internal_error("get_role_details", exc) from exc
 
 # ===== PERMISSION MANAGEMENT ENDPOINTS =====
 
@@ -362,9 +405,8 @@ async def list_permissions(
 
         return permission_responses
 
-    except Exception as e:
-        logger.error(f"Failed to list permissions: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    except Exception as exc:
+        raise _internal_error("list_permissions", exc) from exc
 
 @router.post("/permissions", response_model=PermissionResponse)
 @require_permission("iam.permissions.create")
@@ -376,6 +418,9 @@ async def create_permission(
 
     try:
         db = iam_context.db
+
+        if not iam_context.user.is_superuser:
+            raise HTTPException(status_code=403, detail="Only a superuser can define permissions")
 
         # Check if permission name already exists
         existing_query = select(IAMPermission).where(IAMPermission.name == request.name)
@@ -438,11 +483,140 @@ async def create_permission(
 
     except HTTPException:
         raise
-    except Exception as e:
-        logger.error(f"Failed to create permission: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    except Exception as exc:
+        raise _internal_error("create_permission", exc) from exc
 
 # ===== USER ROLE MANAGEMENT ENDPOINTS =====
+
+@router.post("/users/{user_id}/privileged-access", status_code=status.HTTP_202_ACCEPTED)
+@require_permission("iam.users.assign_roles")
+async def request_privileged_access(
+    user_id: str,
+    request: PrivilegedAccessCreateRequest,
+    iam_context: IAMContext = Depends(get_iam_context),
+):
+    """Start an approval-gated, automatically expiring role assignment."""
+    await _require_scope_access(iam_context, request.scope_id)
+    role = await iam_context.db.get(IAMRole, request.role_id)
+    target = await iam_context.db.get(User, user_id)
+    if role is None or not role.is_active or target is None or not target.is_active:
+        raise HTTPException(status_code=404, detail="Active user or role not found")
+    _require_role_grant_access(iam_context, role)
+
+    request_id = str(uuid.uuid4())
+    workflow_id = f"privileged-access/{request_id}"
+    record = IAMRoleRequest(
+        id=request_id,
+        requester_id=iam_context.user.id,
+        target_user_id=user_id,
+        role_id=request.role_id,
+        scope_id=request.scope_id,
+        workflow_id=workflow_id,
+        request_type="assign",
+        justification=request.justification,
+        duration_seconds=request.duration_seconds,
+        status="pending",
+    )
+    iam_context.db.add(record)
+    await iam_context.db.commit()
+
+    temporal_request = PrivilegedAccessRequest(
+        request_id=request_id,
+        requester_id=iam_context.user.id,
+        target_user_id=user_id,
+        role_id=request.role_id,
+        scope_id=request.scope_id,
+        duration_seconds=request.duration_seconds,
+        approval_timeout_seconds=settings.PRIVILEGED_ACCESS_APPROVAL_TIMEOUT_SECONDS,
+    )
+    try:
+        client = await get_temporal_client()
+        await client.start_workflow(
+            PrivilegedAccessWorkflow.run,
+            temporal_request,
+            id=workflow_id,
+            task_queue=settings.TEMPORAL_IDENTITY_OPS_TASK_QUEUE,
+        )
+    except Exception:
+        record.status = "dispatch_failed"
+        await iam_context.db.commit()
+        logger.exception("Failed to dispatch privileged access request %s", request_id)
+        raise HTTPException(status_code=503, detail="Identity operations service unavailable")
+
+    return {"request_id": request_id, "workflow_id": workflow_id, "status": "pending"}
+
+
+@router.post("/privileged-access/{request_id}/decision", status_code=status.HTTP_202_ACCEPTED)
+@require_permission("iam.users.assign_roles")
+async def decide_privileged_access(
+    request_id: str,
+    decision: PrivilegedAccessDecisionRequest,
+    iam_context: IAMContext = Depends(get_iam_context),
+):
+    """Signal a human approval decision; self-approval is prohibited."""
+    record = await iam_context.db.get(IAMRoleRequest, request_id)
+    if record is None:
+        raise HTTPException(status_code=404, detail="Privileged access request not found")
+    if record.status != "pending":
+        raise HTTPException(status_code=409, detail="Request is no longer pending")
+    if record.requester_id == iam_context.user.id:
+        raise HTTPException(status_code=403, detail="Requesters cannot approve their own access")
+    await _require_scope_access(iam_context, record.scope_id)
+    role = await iam_context.db.get(IAMRole, record.role_id)
+    if role is None or not role.is_active:
+        raise HTTPException(status_code=404, detail="Active role not found")
+    _require_role_grant_access(iam_context, role)
+    if not decision.approved and not decision.reason:
+        raise HTTPException(status_code=422, detail="A denial reason is required")
+
+    record.denial_reason = None if decision.approved else decision.reason
+    await iam_context.db.commit()
+
+    client = await get_temporal_client()
+    handle = client.get_workflow_handle(record.workflow_id)
+    await handle.signal(
+        PrivilegedAccessWorkflow.decide,
+        ApprovalDecision(
+            approved=decision.approved,
+            approver_id=iam_context.user.id,
+        ),
+    )
+    return {"request_id": request_id, "decision": "approved" if decision.approved else "denied"}
+
+
+@router.get("/privileged-access/{request_id}")
+@require_permission("user.read")
+async def get_privileged_access_request(
+    request_id: str,
+    iam_context: IAMContext = Depends(get_iam_context),
+):
+    """Return durable request state and immutable effect references."""
+    record = await iam_context.db.get(IAMRoleRequest, request_id)
+    if record is None:
+        raise HTTPException(status_code=404, detail="Privileged access request not found")
+    await _require_scope_access(iam_context, record.scope_id)
+    effects = await iam_context.db.execute(
+        select(IAMOperationEffect).where(IAMOperationEffect.request_id == request_id)
+    )
+    return {
+        "request_id": record.id,
+        "workflow_id": record.workflow_id,
+        "requester_id": record.requester_id,
+        "target_user_id": record.target_user_id,
+        "role_id": record.role_id,
+        "scope_id": record.scope_id,
+        "status": record.status,
+        "approved_by": record.approved_by,
+        "effects": [
+            {
+                "effect_id": effect.effect_id,
+                "type": effect.effect_type,
+                "details": effect.details,
+                "created_at": effect.created_at,
+            }
+            for effect in effects.scalars().all()
+        ],
+    }
 
 @router.post("/users/{user_id}/roles")
 @require_permission("iam.users.assign_roles")
@@ -450,43 +624,45 @@ async def assign_role_to_user(
     user_id: str,
     request: AssignRoleRequest,
     iam_context: IAMContext = Depends(get_iam_context),
-    use_temporal: bool = Query(True, description="Use Temporal workflow")
 ):
-    """Assign a role to a user using Temporal workflow"""
+    """Assign a role after server-side scope and privilege validation."""
 
     try:
-        # Override user_id from path parameter
-        request.user_id = user_id
-
-        # Use IAM service to assign role
         iam_service = get_iam_service(iam_context.db)
+
+        await _require_scope_access(iam_context, request.scope_id)
+        role = await iam_context.db.get(IAMRole, request.role_id)
+        if role is None or not role.is_active:
+            raise HTTPException(status_code=404, detail="Role not found")
+        _require_role_grant_access(iam_context, role)
 
         expires_at = None
         if request.expires_at:
             expires_at = datetime.fromisoformat(request.expires_at)
 
         result = await iam_service.assign_role_to_user(
-            user_id=request.user_id,
+            user_id=user_id,
             role_id=request.role_id,
             scope_id=request.scope_id,
             granted_by=iam_context.user.id,
             expires_at=expires_at,
-            use_temporal=use_temporal
+            use_temporal=False,
         )
 
         return {
-            'message': 'Role assignment initiated' if use_temporal else 'Role assigned',
+            'message': 'Role assigned',
             'result': result,
-            'user_id': request.user_id,
+            'user_id': user_id,
             'role_id': request.role_id,
             'scope_id': request.scope_id,
             'assigned_by': iam_context.user.id,
             'timestamp': datetime.now().isoformat()
         }
 
-    except Exception as e:
-        logger.error(f"Failed to assign role: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise _internal_error("assign_role_to_user", exc) from exc
 
 @router.get("/users/{user_id}/roles", response_model=UserRoleResponse)
 @require_any_permission(["iam.users.read", "iam.users.read_own"])
@@ -583,9 +759,8 @@ async def get_user_roles(
 
     except HTTPException:
         raise
-    except Exception as e:
-        logger.error(f"Failed to get user roles: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    except Exception as exc:
+        raise _internal_error("get_user_roles", exc) from exc
 
 # ===== PERMISSION CHECK ENDPOINTS =====
 
@@ -598,18 +773,25 @@ async def check_user_permission(
     resource_id: Optional[str] = Query(None, description="Resource ID"),
     scope_id: Optional[str] = Query(None, description="Scope ID"),
     iam_context: IAMContext = Depends(get_iam_context),
-    use_temporal: bool = Query(True, description="Use Temporal workflow")
 ):
     """Check if a user has a specific permission"""
 
     try:
         # Check if user can check permissions for others
-        if (user_id != iam_context.user.id and
-            'iam.permissions.check' not in []):  # Would check actual permissions
-            raise HTTPException(
-                status_code=403,
-                detail="Can only check your own permissions or need admin permission"
+        if user_id != iam_context.user.id:
+            checker_result = await iam_context.iam_service.evaluate_user_permission(
+                user_id=iam_context.user.id,
+                permission_name="iam.permissions.check",
+                use_temporal=False,
             )
+            if not checker_result.get("access_granted"):
+                raise HTTPException(
+                    status_code=403,
+                    detail="Can only check your own permissions or need admin permission",
+                )
+
+        if scope_id:
+            await _require_scope_access(iam_context, scope_id)
 
         # Use IAM service to check permission
         iam_service = get_iam_service(iam_context.db)
@@ -625,7 +807,7 @@ async def check_user_permission(
                 'ip_address': iam_context.ip_address,
                 'user_agent': iam_context.user_agent
             },
-            use_temporal=use_temporal
+            use_temporal=False,
         )
 
         return {
@@ -639,9 +821,10 @@ async def check_user_permission(
             'checked_at': datetime.now().isoformat()
         }
 
-    except Exception as e:
-        logger.error(f"Failed to check permission: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise _internal_error("check_user_permission", exc) from exc
 
 # ===== AUDIT AND REPORTING ENDPOINTS =====
 
@@ -710,9 +893,8 @@ async def get_role_audit_log(
             'generated_at': datetime.now().isoformat()
         }
 
-    except Exception as e:
-        logger.error(f"Failed to get audit log: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    except Exception as exc:
+        raise _internal_error("get_role_audit_log", exc) from exc
 
 # ===== HEALTH CHECK =====
 

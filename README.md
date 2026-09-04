@@ -1,26 +1,24 @@
-# 🔐 FlowShield - AI-Powered Authentication Platform
+# FlowShield - AI-Powered Authentication Platform
 
-**Production-ready OAuth2 authentication system with Temporal.io workflows, AI fraud detection, and comprehensive IAM (Identity & Access Management).**
+**OAuth 2.1/OIDC authentication platform with durable Temporal identity operations, explainable risk policy, strong authentication, and comprehensive IAM.**
 
-## 🚀 Quick Start
+## Quick Start
 
-### Option 1: Automated Setup (Recommended)
+### One-command local platform (recommended)
 ```bash
-# Start platform and create all test users automatically
-docker-compose up -d && sleep 30 && ./scripts/setup-users.sh
+make demo
 ```
 
-### Option 2: Manual Setup
+This builds and waits for the complete local stack, applies schema changes, and idempotently seeds the documented users, IAM roles/scopes, and public PKCE client. No post-start bootstrap command is required.
+
+Optional local Ollama profile:
+
 ```bash
-# 1. Start the platform
-docker-compose up -d
-
-# 2. Wait for services to be ready (30-60 seconds)
-sleep 30
-
-# 3. Set up test users and IAM
-./scripts/setup-users.sh
+make demo-ai
 ```
+
+See [LOCAL_DEMO.md](./LOCAL_DEMO.md) for URLs, personas, operational checks, the local-only security-lab boundary, and limitations.
+See [AI_SDLC.md](./AI_SDLC.md) for model boundaries, versioned evaluation artifacts, release gates, monitoring, and rollback.
 
 ### Access the Applications
 ```bash
@@ -29,93 +27,54 @@ open http://localhost:3000/admin/login  # Admin Portal
 open http://localhost:8081        # Temporal UI (workflows)
 ```
 
-**✅ Ready to test!** All user accounts from the credentials section are now available for login.
+All demo accounts are available after the Compose health checks pass. Their random per-install passwords are stored only in a Docker volume. Display them explicitly when needed with `make demo-credentials`; do not copy the output into source files or logs.
 
-## 🔑 Test User Credentials
+## Demo Personas
 
-> **📋 Dashboard Access Summary:**
+> **Dashboard Access Summary:**
 > - **Admin Dashboard** (http://localhost:3000/admin/login): Super Admin, Manager, Moderator
 > - **User Dashboard** (http://localhost:3000): All users including admins
 
-### 🔴 Super Administrator
-- **Email:** `super.admin@temporal-auth.com`
-- **Username:** `superadmin`
-- **Password:** `SuperAdmin123!`
-- **System Role:** `admin` + `is_superuser: true`
-- **IAM Role:** Super Administrator (All permissions, Global scope)
-- **Dashboard Access:** ✅ **Admin Dashboard** + User Dashboard
-- **Features:** Full system control, all dashboards, all IAM operations
+| Persona | Email | Dashboard | Scope |
+| --- | --- | --- | --- |
+| Super administrator | `super.admin@temporal-auth.com` | Admin | Global |
+| Administrator | `admin@temporal-auth.com` | Admin | ACME Corp |
+| Team manager | `manager@temporal-auth.com` | Admin | Engineering |
+| Content moderator | `moderator@temporal-auth.com` | Admin | Engineering |
+| Data analyst | `analyst@temporal-auth.com` | User | Marketing |
+| Regular user | `user@temporal-auth.com` | User | Frontend Team |
+| Unverified guest | `guest@temporal-auth.com` | User | None |
 
-### 🟡 Team Manager
-- **Email:** `manager@temporal-auth.com`
-- **Username:** `manager`
-- **Password:** `Manager123!`
-- **System Role:** `moderator`
-- **IAM Role:** Manager (Team oversight, Engineering department scope)
-- **Dashboard Access:** ✅ **Admin Dashboard** + User Dashboard
-- **Features:** Team analytics, user viewing, admin operations
+> **Note:** The Compose migration job creates or reconciles all users above, their IAM assignments, generated passwords, and the local OAuth client idempotently.
 
-### 🟢 Content Moderator
-- **Email:** `moderator@temporal-auth.com`
-- **Username:** `moderator`
-- **Password:** `Moderator123!`
-- **System Role:** `moderator`
-- **IAM Role:** Moderator (Content moderation, Engineering department scope)
-- **Dashboard Access:** ✅ **Admin Dashboard** + User Dashboard
-- **Features:** Content moderation, user profile management
-
-### 🔵 Data Analyst
-- **Email:** `analyst@temporal-auth.com`
-- **Username:** `analyst`
-- **Password:** `Analyst123!`
-- **System Role:** `user`
-- **IAM Role:** Data Analyst (Analytics access, Marketing department scope)
-- **Dashboard Access:** 👤 **User Dashboard** only
-- **Features:** Analytics dashboard, reporting features
-
-### ⚪ Regular User
-- **Email:** `user@temporal-auth.com`
-- **Username:** `regularuser`
-- **Password:** `User123!`
-- **System Role:** `user`
-- **IAM Role:** Standard User (Own profile management, Frontend team scope)
-- **Dashboard Access:** 👤 **User Dashboard** only
-- **Features:** User profile settings, basic functionality
-
-### ⚫ Guest User
-- **Email:** `guest@temporal-auth.com`
-- **Username:** `guestuser`
-- **Password:** `Guest123!`
-- **System Role:** `user` + `is_verified: false`
-- **IAM Role:** Guest (Limited read-only, No specific scope)
-- **Dashboard Access:** 👤 **User Dashboard** only
-- **Features:** Basic read-only user dashboard (limited features)
-
-> **📝 Note:** All users above are automatically created by the `./scripts/setup-users.sh` script and configured with proper roles via the IAM bootstrap system.
-
-## 📋 Services Overview
+## Services Overview
 
 | Service | Port | Description |
 |---------|------|-------------|
 | **Frontend** | 3000 | React app with user/admin interfaces |
 | **Backend API** | 8000 | FastAPI with authentication & AI features |
 | **Temporal UI** | 8081 | Workflow monitoring dashboard |
-| **PostgreSQL** | 5432 | Database (auto-configured) |
-| **Redis** | 6379 | Caching & rate limiting |
+| **PostgreSQL** | Internal only | Database (auto-configured) |
+| **Redis** | Internal only | Caching & rate limiting |
+| **Mailpit** | 8025 | Local authentication-email inbox |
+| **Prometheus** | 9090 | Local metrics and target health |
+| **Grafana** | 3001 | Provisioned FlowShield API dashboard |
+| **OTel Collector** | 4317/4318 | OTLP trace and metric ingestion |
+| **Ollama** | 11434 | Optional local AI profile |
 
-## ✨ Key Features
+## Key Features
 
-### 🔐 Authentication & Security
+### Authentication & Security
 - **OAuth2 Authentication** - JWT tokens with secure sessions
-- **AI Fraud Detection** - Real-time risk scoring with ML models
-- **🚀 Predictive Attack Simulation** - Self-defending system that safely attacks itself for security testing
-- **AI-Powered Threat Intelligence** - Local ML models for vulnerability prediction
+- **Explainable Risk Decisions** - Versioned deterministic policy with reason codes and contribution scores
+- **Optional AI Shadow Scoring** - Local Ollama output is observable but cannot override the authoritative policy
+- **Security Lab** - Bounded, deterministic, local-only attack simulations with tamper-evident evidence digests
 - **Rate Limiting** - DDoS protection & adaptive API throttling
 - **Security Headers** - CSRF, CORS, XSS protection
 - **Docker-Isolated Security Testing** - Safe attack simulation environments
 - **Password Visibility** - User-friendly eye icons on password fields
 
-### 👥 Identity & Access Management (IAM)
+### Identity & Access Management (IAM)
 - **Role-Based Access Control (RBAC)** - Granular permissions system
 - **Scope-Based Authorization** - Hierarchical organizational access
 - **Temporal Workflows** - Reliable role assignment & permission evaluation
@@ -124,45 +83,49 @@ open http://localhost:8081        # Temporal UI (workflows)
 - **Multi-level Roles** - Super Admin → Admin → Manager → User → Guest
 - **Scope Hierarchy** - Organization → Department → Team → Resource
 
-### 🎯 Management Dashboards
-- **✨ Enhanced Admin Dashboard** - Fancy UI with advanced animations, system monitoring, predictive attack controls
-- **✨ Enhanced User Dashboard** - Modern glassmorphism design with real-time metrics and particle effects
-- **🚀 Predictive Attack Dashboard** - Real-time security simulation monitoring and control center
+### Management Dashboards
+- **Enhanced Admin Dashboard** - Fancy UI with advanced animations, system monitoring, predictive attack controls
+- **Enhanced User Dashboard** - Modern glassmorphism design with real-time metrics and particle effects
+- **Predictive Attack Dashboard** - Real-time security simulation monitoring and control center
 - **Analytics Dashboard** - Advanced behavioral analytics with AI-powered insights
 - **IAM Management UI** - Role/permission assignment, scope management
 
-### 🔄 Workflow Engine
+### Workflow Engine
 - **Temporal Integration** - Distributed workflow processing
 - **Role Assignment Workflows** - Automated approval processes
 - **Permission Evaluation** - Cached, high-performance access checks
 - **Access Reviews** - Periodic compliance audits
 - **Automated Provisioning** - Rule-based role assignments
 
-### 📱 User Experience
+### User Experience
 - **Responsive Design** - Mobile-friendly interface
 - **Real-time Updates** - Live permission changes
 - **Context-Aware UI** - Role-specific feature visibility
 
-## 🧪 Testing & API Examples
+## Testing & API Examples
 
 ### Running Tests
 ```bash
-# Frontend tests (26 tests)
-cd frontend && npm test -- --watchAll=false
+# Focused backend and frontend merge-gate suites
+make test
 
-# Backend core tests (29 tests - reliable)
-cd backend && PYTHONPATH=. python -m pytest tests/test_pkce_implementation.py tests/test_simple.py -v
+# Run either suite independently
+make test-backend
+make test-frontend
 
-# All tests (151 total)
+# Full suite, including legacy compatibility tests
 cd backend && PYTHONPATH=. python -m pytest tests/ -v
 ```
 
+The focused suite is the merge gate. Some legacy compatibility tests still use outdated dependency overrides and are tracked separately; the heavyweight historical ML workflow tests require the optional AI dependencies.
+
 ### IAM API Examples
 ```bash
-# 1. Login as admin to get token
-curl -X POST http://localhost:8000/user/login \
-  -H "Content-Type: application/json" \
-  -d '{"email": "admin@temporal-auth.com", "password": "Admin123!"}'
+# First retrieve the generated local credential file interactively
+make demo-credentials
+
+# Browser clients authenticate through the HttpOnly BFF session
+open http://localhost:3000/admin/login
 
 # 2. List all roles (use token from step 1)
 curl -X GET http://localhost:8000/iam/roles \
@@ -202,36 +165,38 @@ curl -X GET http://localhost:8000/dashboard/profile \
   -H "Authorization: Bearer USER_TOKEN"
 ```
 
-## 📚 Documentation
+## Documentation
 
+- **[MODERNIZATION_ROADMAP.md](./MODERNIZATION_ROADMAP.md)** - Evidence-based implementation status and phased delivery plan
 - **[FEATURES.md](./FEATURES.md)** - Complete feature list
 - **[AI_AUTH_FEATURES.md](./AI_AUTH_FEATURES.md)** - AI-powered capabilities
 - **[GUARDFLOW_FEATURE_DEVELOPMENT_GUIDE.md](./GUARDFLOW_FEATURE_DEVELOPMENT_GUIDE.md)** - Future roadmap
 - **[SETUP.md](./SETUP.md)** - Detailed setup instructions
 - **[API.md](./API.md)** - API reference
 
-## 🔧 Development
+## Development
 
 ```bash
 # Stop services
-docker-compose down
+make down
 
 # View logs
-docker logs oauth2_backend
-docker logs oauth2_frontend
+make logs
 
 # Health check
-curl http://localhost:8000/health
+curl --fail http://localhost:8000/health/ready
 ```
 
-## 🎯 Production Ready
+## Current Platform Capabilities
 
-- ✅ **Docker containerized** - One command deployment
-- ✅ **Health checks** - Automatic service monitoring
-- ✅ **Database migrations** - Schema auto-initialization
-- ✅ **Error handling** - Comprehensive error management
-- ✅ **Security headers** - CSRF, CORS, rate limiting
-- ✅ **Admin controls** - Full system management
+These capabilities exist in the project, but production readiness still depends on completing the security, testing, observability, and delivery work in the modernization roadmap.
+
+- Implemented: **Docker containerized** - One command deployment
+- Implemented: **Health checks** - Automatic service monitoring
+- Implemented: **Database migrations** - Schema auto-initialization
+- Implemented: **Error handling** - Comprehensive error management
+- Implemented: **Security headers** - CSRF, CORS, rate limiting
+- Implemented: **Admin controls** - Full system management
 
 ---
 

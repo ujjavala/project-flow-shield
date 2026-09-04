@@ -63,8 +63,8 @@ class OllamaService:
                 else:
                     logger.error(f"Ollama error: {response.status_code}")
                     return ""
-        except Exception as e:
-            logger.error(f"Ollama request failed: {e}")
+        except Exception as exc:
+            logger.error("Ollama request failed exception_type=%s", type(exc).__name__)
             return ""
     
     async def check_health(self) -> bool:
@@ -91,7 +91,6 @@ async def ai_health():
             "services": {
                 "ollama": {
                     "status": "available" if ollama_available else "unavailable",
-                    "endpoint": ollama.base_url,
                     "model": "llama3"
                 },
                 "fallback": {
@@ -105,12 +104,12 @@ async def ai_health():
                 "local_ai": ollama_available
             }
         }
-    except Exception as e:
-        logger.error(f"AI health check failed: {e}")
+    except Exception as exc:
+        logger.error("AI health check failed exception_type=%s", type(exc).__name__)
         return {
             "timestamp": datetime.now().isoformat(),
             "ai_status": "error",
-            "error": str(e)
+            "error": "AI health check failed"
         }
 
 @router.post("/analyze-password")
@@ -123,11 +122,19 @@ async def analyze_password(request: PasswordAnalysisRequest):
         # Try Ollama first
         ollama_result = None
         if await ollama.check_health():
+            password_features = {
+                "length_bucket": "short" if len(password) < 12 else "medium" if len(password) < 20 else "long",
+                "has_uppercase": bool(re.search(r'[A-Z]', password)),
+                "has_lowercase": bool(re.search(r'[a-z]', password)),
+                "has_numbers": bool(re.search(r'[0-9]', password)),
+                "has_special": bool(re.search(r'[^A-Za-z0-9]', password)),
+                "has_repeated_sequence": bool(re.search(r'(.)\1{2,}', password)),
+            }
             prompt = f"""
-            Analyze the security of this password: "{password}"
-            
-            User: {user_context.get('first_name', '')} {user_context.get('last_name', '')}
-            Email: {user_context.get('email', '')}
+            Analyze these non-identifying password-strength features:
+            {json.dumps(password_features, sort_keys=True)}
+
+            The raw password and user identity are intentionally unavailable.
             
             Rate the security from 0.0 to 1.0 and respond with only:
             SCORE: <number>
@@ -189,9 +196,9 @@ async def analyze_password(request: PasswordAnalysisRequest):
         
         return result
         
-    except Exception as e:
-        logger.error(f"Password analysis failed: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    except Exception as exc:
+        logger.error("Password analysis failed exception_type=%s", type(exc).__name__)
+        raise HTTPException(status_code=500, detail="Password analysis failed") from exc
 
 @router.post("/detect-fraud")
 async def detect_fraud(request: FraudDetectionRequest):
@@ -200,12 +207,20 @@ async def detect_fraud(request: FraudDetectionRequest):
         # Try Ollama first
         ollama_result = None
         if await ollama.check_health():
+            email_domain = request.email.rpartition('@')[2].lower()
+            suspicious_domains = ['guerrillamail', 'mailinator', '10minutemail', 'tempmail']
+            fraud_features = {
+                "disposable_email_domain": any(domain in email_domain for domain in suspicious_domains),
+                "automated_source": request.source == 'automated',
+                "suspicious_user_agent": 'bot' in request.user_agent.lower() or len(request.user_agent) < 20,
+                "identity_fields_present": bool(request.first_name and request.last_name),
+                "network_context_present": bool(request.ip_address),
+            }
             prompt = f"""
-            Analyze this registration for fraud:
-            Email: {request.email}
-            Name: {request.first_name} {request.last_name}
-            IP: {request.ip_address}
-            Agent: {request.user_agent}
+            Analyze these non-identifying registration-risk features:
+            {json.dumps(fraud_features, sort_keys=True)}
+
+            Direct identifiers and raw network/device data are intentionally unavailable.
             
             Rate fraud risk 0.0-1.0 and respond with only:
             FRAUD_SCORE: <number>
@@ -268,9 +283,9 @@ async def detect_fraud(request: FraudDetectionRequest):
         
         return result
         
-    except Exception as e:
-        logger.error(f"Fraud detection failed: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    except Exception as exc:
+        logger.error("Fraud detection failed exception_type=%s", type(exc).__name__)
+        raise HTTPException(status_code=500, detail="Fraud detection failed") from exc
 
 @router.post("/test-fraud-detection")
 async def test_fraud_detection():

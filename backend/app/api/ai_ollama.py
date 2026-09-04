@@ -64,12 +64,12 @@ async def ai_health():
             },
             "provider": "ollama_local"
         }
-    except Exception as e:
-        logger.error(f"AI health check failed: {e}")
+    except Exception as exc:
+        logger.error("AI health check failed exception_type=%s", type(exc).__name__)
         return {
             "timestamp": datetime.now().isoformat(),
             "ai_status": "unhealthy",
-            "error": str(e),
+            "error": "AI health check failed",
             "provider": "ollama_local"
         }
 
@@ -93,9 +93,9 @@ async def analyze_password(request: PasswordAnalysisRequest):
             "timestamp": datetime.now().isoformat()
         }
         
-    except Exception as e:
-        logger.error(f"Password analysis failed: {e}")
-        raise HTTPException(status_code=500, detail=f"Password analysis failed: {str(e)}")
+    except Exception as exc:
+        logger.error("Password analysis failed exception_type=%s", type(exc).__name__)
+        raise HTTPException(status_code=500, detail="Password analysis failed") from exc
 
 @router.post("/detect-fraud")
 async def detect_fraud(request: FraudDetectionRequest):
@@ -121,9 +121,9 @@ async def detect_fraud(request: FraudDetectionRequest):
             "timestamp": datetime.now().isoformat()
         }
         
-    except Exception as e:
-        logger.error(f"Fraud detection failed: {e}")
-        raise HTTPException(status_code=500, detail=f"Fraud detection failed: {str(e)}")
+    except Exception as exc:
+        logger.error("Fraud detection failed exception_type=%s", type(exc).__name__)
+        raise HTTPException(status_code=500, detail="Fraud detection failed") from exc
 
 @router.post("/analyze-behavior")
 async def analyze_behavior(request: BehavioralAnalysisRequest):
@@ -148,9 +148,9 @@ async def analyze_behavior(request: BehavioralAnalysisRequest):
             "timestamp": datetime.now().isoformat()
         }
         
-    except Exception as e:
-        logger.error(f"Behavioral analysis failed: {e}")
-        raise HTTPException(status_code=500, detail=f"Behavioral analysis failed: {str(e)}")
+    except Exception as exc:
+        logger.error("Behavioral analysis failed exception_type=%s", type(exc).__name__)
+        raise HTTPException(status_code=500, detail="Behavioral analysis failed") from exc
 
 @router.post("/test-fraud-detection")
 async def test_fraud_detection():
@@ -179,9 +179,9 @@ async def test_fraud_detection():
             "timestamp": datetime.now().isoformat()
         }
         
-    except Exception as e:
-        logger.error(f"Fraud detection test failed: {e}")
-        raise HTTPException(status_code=500, detail=f"Test failed: {str(e)}")
+    except Exception as exc:
+        logger.error("Fraud detection test failed exception_type=%s", type(exc).__name__)
+        raise HTTPException(status_code=500, detail="Test failed") from exc
 
 @router.post("/test-password-analysis")
 async def test_password_analysis():
@@ -213,9 +213,9 @@ async def test_password_analysis():
             "timestamp": datetime.now().isoformat()
         }
         
-    except Exception as e:
-        logger.error(f"Password analysis test failed: {e}")
-        raise HTTPException(status_code=500, detail=f"Test failed: {str(e)}")
+    except Exception as exc:
+        logger.error("Password analysis test failed exception_type=%s", type(exc).__name__)
+        raise HTTPException(status_code=500, detail="Test failed") from exc
 
 @router.get("/model-status")
 async def model_status():
@@ -230,7 +230,6 @@ async def model_status():
                 "ollama": {
                     "status": ollama_health.get("status", "unknown"),
                     "model": ollama_health.get("model", "unknown"),
-                    "endpoint": ollama_health.get("endpoint", "unknown"),
                     "available": ollama_health.get("available", False)
                 },
                 "fallback_ml": {
@@ -251,10 +250,10 @@ async def model_status():
             "timestamp": datetime.now().isoformat()
         }
         
-    except Exception as e:
-        logger.error(f"Model status check failed: {e}")
+    except Exception as exc:
+        logger.error("Model status check failed exception_type=%s", type(exc).__name__)
         return {
-            "error": str(e),
+            "error": "Model status check failed",
             "models": {
                 "ollama": {"status": "error"},
                 "fallback_ml": {"status": "available"}
@@ -292,11 +291,11 @@ async def debug_models():
             "timestamp": datetime.now().isoformat()
         }
         
-    except Exception as e:
-        logger.error(f"Debug check failed: {e}")
+    except Exception as exc:
+        logger.error("Debug check failed exception_type=%s", type(exc).__name__)
         return {
             "debug_info": {
-                "error": str(e),
+                "error": "Debug check failed",
                 "system_status": "error"
             },
             "troubleshooting": {

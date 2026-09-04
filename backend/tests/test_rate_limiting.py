@@ -25,6 +25,7 @@ from app.temporal.workflows.rate_limiting_workflow import (
 
 # Import activities (we'll mock Redis for testing)
 from app.temporal.activities import rate_limiting_activities
+from app.utils.security import create_access_token
 
 # Create test client
 client = TestClient(app)
@@ -253,13 +254,13 @@ class TestRateLimitingAPI:
 
     def test_rate_limiting_health_check(self):
         """Test rate limiting service health check"""
-        with patch('redis.Redis') as mock_redis_class:
+        with patch('redis.Redis.from_url') as mock_redis_from_url:
             mock_redis = Mock()
             mock_redis.ping.return_value = True
             mock_redis.setex.return_value = True
             mock_redis.get.return_value = "test"
             mock_redis.delete.return_value = 1
-            mock_redis_class.return_value = mock_redis
+            mock_redis_from_url.return_value = mock_redis
 
             response = client.get("/rate-limiting/health")
             assert response.status_code == 200
@@ -269,18 +270,14 @@ class TestRateLimitingAPI:
 
     def test_rate_limiting_check_request(self):
         """Test rate limiting check endpoint"""
-        with patch('app.temporal.client.get_temporal_client') as mock_client:
-            mock_temporal = Mock()
-            mock_workflow = Mock()
-            mock_workflow.result.return_value = {
+        with patch('app.api.rate_limiting.rate_limiter.check') as mock_check:
+            mock_check.return_value = {
                 'allowed': True,
                 'remaining': 95,
                 'reset_time': '2023-01-01T12:00:00',
                 'current_count': 5,
                 'limit': 100
             }
-            mock_temporal.start_workflow.return_value = mock_workflow
-            mock_client.return_value = mock_temporal
 
             request_data = {
                 "identifier": "test_user",
@@ -296,10 +293,10 @@ class TestRateLimitingAPI:
 
     def test_get_rate_limit_status(self):
         """Test get rate limit status endpoint"""
-        with patch('redis.Redis') as mock_redis_class:
+        with patch('redis.Redis.from_url') as mock_redis_from_url:
             mock_redis = Mock()
             mock_redis.zrangebyscore.return_value = ['req1', 'req2', 'req3']
-            mock_redis_class.return_value = mock_redis
+            mock_redis_from_url.return_value = mock_redis
 
             response = client.get("/rate-limiting/status/test_user?limit_type=api")
             assert response.status_code == 200
@@ -311,11 +308,11 @@ class TestRateLimitingAPI:
     def test_get_rate_limit_metrics_unauthorized(self):
         """Test rate limit metrics endpoint without authorization"""
         response = client.get("/rate-limiting/metrics")
-        assert response.status_code == 422  # Unauthorized due to missing auth
+        assert response.status_code == 403
 
     def test_get_rate_limit_metrics_authorized(self):
         """Test rate limit metrics endpoint with authorization"""
-        with patch('redis.Redis') as mock_redis_class:
+        with patch('redis.Redis.from_url') as mock_redis_from_url:
             mock_redis = Mock()
             mock_redis.lrange.return_value = [
                 json.dumps({
@@ -328,9 +325,10 @@ class TestRateLimitingAPI:
                 })
             ]
             mock_redis.scan_iter.return_value = []
-            mock_redis_class.return_value = mock_redis
+            mock_redis_from_url.return_value = mock_redis
 
-            headers = {"Authorization": "Bearer test_token"}
+            token = create_access_token({"sub": "admin-user", "is_admin": True})
+            headers = {"Authorization": f"Bearer {token}"}
             response = client.get("/rate-limiting/metrics", headers=headers)
             assert response.status_code == 200
             data = response.json()
@@ -444,7 +442,7 @@ class TestRateLimitingIntegration:
         """Test admin dashboard rate limiting endpoints"""
         # Test rate limiting metrics endpoint (will fail auth but should exist)
         response = client.get("/admin/rate-limiting")
-        assert response.status_code == 200  # Should return fallback data
+        assert response.status_code == 403
 
         # Test rate limiting actions endpoint
         action_data = {
@@ -454,7 +452,7 @@ class TestRateLimitingIntegration:
         }
         response = client.post("/admin/rate-limiting/actions", json=action_data)
         # Should handle the request (may fail due to missing auth but endpoint exists)
-        assert response.status_code in [200, 401, 500]
+        assert response.status_code in [200, 401, 403, 500]
 
 class TestRateLimitingErrorHandling:
     """Test error handling in rate limiting system"""

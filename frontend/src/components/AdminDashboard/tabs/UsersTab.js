@@ -1,5 +1,5 @@
 import React from 'react';
-import { FiUsers, FiCheckCircle, FiClock, FiUserPlus } from 'react-icons/fi';
+import { Users as FiUsers, CheckCircle as FiCheckCircle, Clock as FiClock, UserPlus as FiUserPlus } from 'lucide-react';
 
 const UsersTab = ({ userStats }) => (
   <div className="users-tab">

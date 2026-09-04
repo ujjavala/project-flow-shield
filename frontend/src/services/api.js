@@ -1,23 +1,23 @@
 import axios from 'axios';
-import Cookies from 'js-cookie';
-import { authService } from './auth';
+import { csrfHeaders } from './bffService';
+
+const baseURL = import.meta.env.VITE_API_URL || '';
+let refreshPromise = null;
 
 // Create axios instance
 const api = axios.create({
-  baseURL: process.env.REACT_APP_API_URL || 'http://localhost:8000',
+  baseURL,
   timeout: 10000,
+  withCredentials: true,
   headers: {
     'Content-Type': 'application/json',
   },
 });
 
-// Request interceptor to add auth token
+// BFF sessions are HttpOnly; JavaScript adds only the session-bound CSRF value.
 api.interceptors.request.use(
   (config) => {
-    const token = Cookies.get('access_token');
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
-    }
+    config.headers = csrfHeaders(config.headers);
     return config;
   },
   (error) => {
@@ -31,23 +31,22 @@ api.interceptors.response.use(
   async (error) => {
     const originalRequest = error.config;
 
-    if (error.response?.status === 401 && !originalRequest._retry) {
+    if (error.response?.status === 401 && !originalRequest?._retry && !originalRequest?.url?.startsWith('/bff/')) {
       originalRequest._retry = true;
 
       try {
-        // Try to refresh token
-        await authService.refreshToken();
-        
-        // Retry original request with new token
-        const token = Cookies.get('access_token');
-        if (token) {
-          originalRequest.headers.Authorization = `Bearer ${token}`;
+        if (!refreshPromise) {
+          refreshPromise = axios.post(
+            `${baseURL}/bff/refresh`,
+            {},
+            { withCredentials: true, headers: csrfHeaders() },
+          ).finally(() => {
+            refreshPromise = null;
+          });
         }
-        
+        await refreshPromise;
         return api(originalRequest);
       } catch (refreshError) {
-        // Refresh failed, redirect to login
-        authService.logout();
         window.location.href = '/login';
         return Promise.reject(refreshError);
       }

@@ -10,10 +10,43 @@ from typing import Callable, Dict, Any
 import time
 import hashlib
 import secrets
-import asyncio
-from datetime import datetime, timedelta
+
+from app.config import settings
+from app.services.rate_limit_service import rate_limiter
+from app.services.bff_session_service import get_bff_session, valid_csrf
 
 logger = logging.getLogger(__name__)
+
+
+class BFFSessionMiddleware(BaseHTTPMiddleware):
+    """Translate an opaque HttpOnly BFF session into server-side bearer auth."""
+
+    async def dispatch(self, request: Request, call_next: Callable):
+        session_id = request.cookies.get("bff_session")
+        if not session_id:
+            return await call_next(request)
+
+        session = await get_bff_session(session_id)
+        if session is None:
+            return await call_next(request)
+
+        if request.method not in {"GET", "HEAD", "OPTIONS"} and request.url.path != "/bff/login":
+            if not valid_csrf(
+                session,
+                request.cookies.get("csrf_token"),
+                request.headers.get("X-CSRF-Token"),
+            ):
+                return JSONResponse(
+                    status_code=403,
+                    content={"error": "csrf_validation_failed"},
+                )
+
+        if "authorization" not in request.headers:
+            request.scope["headers"].append(
+                (b"authorization", f"Bearer {session['access_token']}".encode("ascii"))
+            )
+        request.state.bff_session = session
+        return await call_next(request)
 
 
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
@@ -125,8 +158,12 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
             "X-Auth-Method": "pkce-oauth2.1"
         }
         
-        # Apply headers
+        # Preserve stricter endpoint-specific cache directives such as token
+        # refresh responses, while defaulting every authentication flow to
+        # private no-store semantics.
         for header, value in security_headers.items():
+            if header == "Cache-Control" and header in response.headers:
+                continue
             response.headers[header] = value
 
     def _get_csp_policy(self, nonce: str, request: Request) -> str:
@@ -174,7 +211,9 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     def _is_auth_request(self, request: Request) -> bool:
         """Check if request is authentication-related"""
         auth_paths = [
-            "/auth/", "/oauth/", "/oauth2/", "/pkce/", "/token", "/login", "/logout"
+            "/auth/", "/oauth/", "/oauth2/", "/pkce/", "/bff/", "/token",
+            "/login", "/logout", "/refresh", "/password-reset/", "/verify-email",
+            "/resend-verification",
         ]
         return any(path in str(request.url.path) for path in auth_paths)
 
@@ -368,7 +407,8 @@ class RateLimitingMiddleware(BaseHTTPMiddleware):
         super().__init__(app)
         self.config = config or {}
         self.bypass_paths = {
-            "/health", "/docs", "/openapi.json", "/redoc",
+            "/health", "/health/live", "/health/ready", "/metrics",
+            "/docs", "/openapi.json", "/redoc",
             "/temporal-status", "/temporal-ping",
             "/rate-limiting/health"  # Don't rate limit the rate limiting health check
         }
@@ -429,8 +469,8 @@ class RateLimitingMiddleware(BaseHTTPMiddleware):
 
             return response
 
-        except Exception as e:
-            logger.error(f"Rate limiting middleware error: {e}")
+        except Exception:
+            logger.exception("Rate limiting middleware error")
             # On error, allow request to proceed (fail open)
             return await call_next(request)
 
@@ -440,16 +480,20 @@ class RateLimitingMiddleware(BaseHTTPMiddleware):
         path = request.url.path.lower()
         method = request.method.upper()
 
+        # Credential-recovery endpoints need a dedicated low-volume policy.
+        if any(reset_path in path for reset_path in ['/password-reset', '/password_reset']):
+            return 'password_reset'
+
+        # Registration endpoints - very strict limits
+        if any(reg_path in path for reg_path in ['/register', '/signup', '/user/create']):
+            return 'registration'
+
         # Authentication endpoints - stricter limits
         if any(auth_path in path for auth_path in ['/auth/', '/oauth/', '/pkce/', '/login', '/token']):
             if 'login' in path or method == 'POST':
                 return 'login'
             else:
                 return 'api'
-
-        # Registration endpoints - very strict limits
-        if any(reg_path in path for reg_path in ['/register', '/signup', '/user/create']):
-            return 'registration'
 
         # MFA endpoints - strict limits
         if any(mfa_path in path for mfa_path in ['/mfa', '/2fa', '/verify']):
@@ -464,6 +508,15 @@ class RateLimitingMiddleware(BaseHTTPMiddleware):
 
     def _get_client_identifier(self, request: Request) -> str:
         """Get client identifier for rate limiting"""
+
+        limit_type = self._determine_limit_type(request)
+
+        # Anonymous authentication operations are always bound to the source IP.
+        # This prevents callers rotating arbitrary invalid bearer values to evade limits.
+        if limit_type in {'login', 'registration', 'password_reset', 'mfa'}:
+            client_ip = self._get_client_ip(request)
+            ip_hash = hashlib.sha256(client_ip.encode()).hexdigest()[:16]
+            return f"ip_{ip_hash}"
 
         # Try to get user ID from token if available
         auth_header = request.headers.get('Authorization', '')
@@ -481,82 +534,26 @@ class RateLimitingMiddleware(BaseHTTPMiddleware):
 
         # Fall back to IP address
         client_ip = self._get_client_ip(request)
-        return f"ip_{client_ip}"
+        ip_hash = hashlib.sha256(client_ip.encode()).hexdigest()[:16]
+        return f"ip_{ip_hash}"
 
     def _get_client_ip(self, request: Request) -> str:
         """Get client IP address considering proxies"""
 
-        # Check for forwarded headers
-        forwarded_headers = ["x-forwarded-for", "x-real-ip", "x-client-ip"]
-
-        for header in forwarded_headers:
-            if header in request.headers:
-                ip = request.headers[header].split(",")[0].strip()
-                if ip:
-                    return ip
+        # Forwarded headers are attacker-controlled unless a trusted proxy strips
+        # and rewrites them before the request reaches this process.
+        if settings.TRUST_PROXY_HEADERS:
+            forwarded_headers = ["x-forwarded-for", "x-real-ip", "x-client-ip"]
+            for header in forwarded_headers:
+                if header in request.headers:
+                    ip = request.headers[header].split(",")[0].strip()
+                    if ip:
+                        return ip
 
         # Fallback to direct client IP
         return getattr(request.client, "host", "unknown")
 
     async def _check_rate_limit(self, request: Request, client_id: str, limit_type: str) -> Dict[str, Any]:
-        """Check rate limit using Temporal workflow"""
+        """Atomically consume one request from the applicable rate-limit bucket."""
 
-        try:
-            from app.temporal.client import get_temporal_client
-            from app.temporal.workflows.rate_limiting_workflow import (
-                RateLimitingWorkflow, RateLimitRequest
-            )
-
-            # Create rate limit request
-            rate_limit_key = f"{limit_type}:{client_id}"
-
-            temporal_request = RateLimitRequest(
-                key=rate_limit_key,
-                limit_type=limit_type,
-                identifier=client_id,
-                action=f"{request.method}_{request.url.path}",
-                metadata={
-                    'user_agent': request.headers.get('user-agent', ''),
-                    'referer': request.headers.get('referer', ''),
-                    'request_time': datetime.now().isoformat()
-                }
-            )
-
-            # Execute rate limiting workflow
-            client = await get_temporal_client()
-
-            # Use start_workflow instead of execute_workflow for async processing
-            workflow_handle = await client.start_workflow(
-                RateLimitingWorkflow.run,
-                temporal_request,
-                id=f"rate_limit_{rate_limit_key}_{int(time.time())}",
-                task_queue="guardflow"
-            )
-
-            # Wait for result with timeout
-            try:
-                result = await asyncio.wait_for(workflow_handle.result(), timeout=5.0)
-                return result.__dict__ if hasattr(result, '__dict__') else result
-            except asyncio.TimeoutError:
-                logger.warning(f"Rate limit check timeout for {client_id}")
-                # On timeout, allow request (fail open)
-                return {
-                    'allowed': True,
-                    'remaining': 100,
-                    'reset_time': (datetime.now() + timedelta(hours=1)).isoformat(),
-                    'current_count': 0,
-                    'limit': 100,
-                    'blocked_reason': 'Rate limiting service timeout - request allowed'
-                }
-
-        except Exception as e:
-            logger.error(f"Rate limiting check failed: {e}")
-            # On error, allow request (fail open policy)
-            return {
-                'allowed': True,
-                'remaining': 100,
-                'reset_time': (datetime.now() + timedelta(hours=1)).isoformat(),
-                'current_count': 0,
-                'limit': 100,
-                'blocked_reason': 'Rate limiting service error - request allowed'
-            }
+        return await rate_limiter.check(client_id, limit_type)

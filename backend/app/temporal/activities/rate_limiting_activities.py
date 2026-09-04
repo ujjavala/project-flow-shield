@@ -12,12 +12,13 @@ import redis
 import hashlib
 
 from temporalio import activity
+from app.config import settings
 
 # Configure logging
 logger = logging.getLogger(__name__)
 
 # Redis connection for rate limiting storage
-redis_client = redis.Redis(host='localhost', port=6379, db=1, decode_responses=True)
+redis_client = redis.Redis.from_url(settings.REDIS_URL, decode_responses=True)
 
 # Rate limit configurations by type and user tier
 DEFAULT_RATE_LIMITS = {

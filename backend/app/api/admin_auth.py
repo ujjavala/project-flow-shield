@@ -6,7 +6,8 @@ Separate login/authentication endpoints for admin users
 import logging
 from datetime import datetime, timedelta
 from typing import Dict, Any, Optional
-from fastapi import APIRouter, HTTPException, Depends, Response, status
+from fastapi import APIRouter, HTTPException, Depends, Request, Response, status
+from fastapi.responses import JSONResponse
 from fastapi.security import OAuth2PasswordRequestForm
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -14,7 +15,15 @@ from sqlalchemy import select
 
 from app.database.connection import get_db
 from app.models.user import User, RefreshToken
-from app.utils.security import verify_password, create_access_token, create_refresh_token
+from app.models.auth_security import AuthChallenge
+from app.services.session_service import (
+    InvalidRefreshToken,
+    RefreshTokenReuseDetected,
+    create_session_tokens,
+    revoke_session,
+    rotate_refresh_token,
+)
+from app.utils.security import hash_one_time_token, verify_password, verify_token
 from app.utils.admin_auth import (
     create_admin_session_log,
     ADMIN_SECURITY_HEADERS,
@@ -49,9 +58,10 @@ class AdminPasswordChangeRequest(BaseModel):
     new_password: str = Field(..., description="New admin password")
     force_logout_other_sessions: Optional[bool] = Field(default=True, description="Force logout of other admin sessions")
 
-@router.post("/login", response_model=AdminLoginResponse)
+@router.post("/login", response_model=None)
 async def admin_login(
     login_data: AdminLoginRequest,
+    request: Request,
     response: Response,
     db: AsyncSession = Depends(get_db)
 ):
@@ -68,9 +78,8 @@ async def admin_login(
 
         if not user or not verify_password(login_data.password, user.hashed_password):
             # Log failed admin login attempt
-            logger.warning(f"Failed admin login attempt for: {login_data.email}")
+            logger.warning("Admin login failed reason=invalid_credentials")
             await _log_admin_security_event("admin_login_failed", {
-                "email": login_data.email,
                 "reason": "invalid_credentials",
                 "timestamp": datetime.now().isoformat()
             })
@@ -80,9 +89,9 @@ async def admin_login(
             )
 
         if not user.is_active:
-            logger.warning(f"Inactive admin account login attempt: {login_data.email}")
+            logger.warning("Admin login failed user_id=%s reason=account_inactive", user.id)
             await _log_admin_security_event("admin_login_failed", {
-                "email": login_data.email,
+                "user_id": user.id,
                 "reason": "account_inactive",
                 "timestamp": datetime.now().isoformat()
             })
@@ -93,9 +102,9 @@ async def admin_login(
 
         # Check if user has admin privileges
         if not _is_admin_user(user):
-            logger.warning(f"Non-admin user attempted admin login: {login_data.email}")
+            logger.warning("Admin login failed user_id=%s reason=insufficient_privileges", user.id)
             await _log_admin_security_event("admin_login_failed", {
-                "email": login_data.email,
+                "user_id": user.id,
                 "reason": "insufficient_privileges",
                 "user_role": user.role,
                 "timestamp": datetime.now().isoformat()
@@ -107,9 +116,9 @@ async def admin_login(
 
         # Check email verification for admin accounts
         if not user.is_verified:
-            logger.warning(f"Unverified admin account login attempt: {login_data.email}")
+            logger.warning("Admin login failed user_id=%s reason=email_not_verified", user.id)
             await _log_admin_security_event("admin_login_failed", {
-                "email": login_data.email,
+                "user_id": user.id,
                 "reason": "email_not_verified",
                 "timestamp": datetime.now().isoformat()
             })
@@ -118,34 +127,37 @@ async def admin_login(
                 detail="Admin email verification required"
             )
 
-        # Create admin tokens with enhanced payload
-        token_payload = {
-            "sub": user.id,
-            "email": user.email,
-            "role": user.role,
-            "is_admin": True,
-            "session_type": "admin"
-        }
+        if user.totp_enabled:
+            import secrets
+            import uuid
 
-        # Adjust token expiration for admin sessions
+            challenge_token = secrets.token_urlsafe(32)
+            challenge = AuthChallenge(
+                id=str(uuid.uuid4()), user_id=user.id, purpose="totp_login",
+                challenge=hash_one_time_token(challenge_token),
+                created_at=datetime.now().astimezone(),
+                expires_at=datetime.now().astimezone() + timedelta(seconds=min(settings.AUTH_CHALLENGE_EXPIRE_SECONDS, 600)),
+            )
+            db.add(challenge)
+            await db.commit()
+            return JSONResponse(
+                status_code=status.HTTP_202_ACCEPTED,
+                content={"mfa_required": True, "challenge_id": challenge.id, "challenge_token": challenge_token,
+                         "expires_in": min(settings.AUTH_CHALLENGE_EXPIRE_SECONDS, 600)},
+                headers={"Cache-Control": "no-store", "Pragma": "no-cache"},
+            )
+
         admin_token_expire = settings.JWT_ACCESS_TOKEN_EXPIRE_MINUTES
         if login_data.remember_me:
             admin_token_expire *= 2  # Extended session for remember me
-
-        access_token = create_access_token(token_payload, expires_delta=timedelta(minutes=admin_token_expire))
-        refresh_token = create_refresh_token({"sub": user.id, "is_admin": True})
-
-        # Store refresh token with admin flag
-        refresh_token_record = RefreshToken(
-            user_id=user.id,
-            token=refresh_token,
-            expires_at=datetime.utcnow() + timedelta(days=settings.JWT_REFRESH_TOKEN_EXPIRE_DAYS)
+        user.last_login = datetime.now().astimezone()
+        tokens = await create_session_tokens(
+            db,
+            user,
+            authentication_method="admin",
+            ip_address=request.client.host if request.client else None,
+            user_agent=request.headers.get("user-agent"),
         )
-        db.add(refresh_token_record)
-
-        # Update last login
-        user.last_login = datetime.utcnow()
-        await db.commit()
 
         # Get admin permissions
         permissions = _get_admin_permissions(user)
@@ -159,7 +171,7 @@ async def admin_login(
         }
 
         # Log successful admin login
-        logger.info(f"Admin user logged in successfully: {user.email} (role: {user.role})")
+        logger.info("Admin login succeeded user_id=%s role=%s", user.id, user.role)
         await create_admin_session_log(user, "admin_login_success", {
             "remember_me": login_data.remember_me,
             "permissions": permissions,
@@ -167,8 +179,8 @@ async def admin_login(
         })
 
         return AdminLoginResponse(
-            access_token=access_token,
-            refresh_token=refresh_token,
+            access_token=tokens.access_token,
+            refresh_token=tokens.refresh_token,
             expires_in=admin_token_expire * 60,
             admin_role=user.role,
             permissions=permissions,
@@ -177,8 +189,8 @@ async def admin_login(
 
     except HTTPException:
         raise
-    except Exception as e:
-        logger.error(f"Admin login failed: {e}")
+    except Exception as exc:
+        logger.error("Admin login failed unexpectedly exception_type=%s", type(exc).__name__)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Admin login failed"
@@ -199,7 +211,7 @@ async def admin_logout(
         if request.logout_all_sessions:
             # Find user from refresh token
             result = await db.execute(
-                select(RefreshToken).where(RefreshToken.token == request.refresh_token)
+                select(RefreshToken).where(RefreshToken.token_hash == hash_one_time_token(request.refresh_token))
             )
             refresh_token_record = result.scalar_one_or_none()
 
@@ -211,12 +223,12 @@ async def admin_logout(
                 all_tokens = all_tokens_result.scalars().all()
 
                 for token in all_tokens:
-                    token.is_revoked = True
+                    await revoke_session(db, token.session_id, token.user_id)
 
                 # Get admin user for logging
                 admin_user = await db.get(User, refresh_token_record.user_id)
                 if admin_user:
-                    logger.info(f"Admin user logged out from all sessions: {admin_user.email}")
+                    logger.info("Admin logout-all succeeded user_id=%s", admin_user.id)
                     await create_admin_session_log(admin_user, "admin_logout_all_sessions")
 
             await db.commit()
@@ -229,17 +241,17 @@ async def admin_logout(
         else:
             # Revoke single refresh token
             result = await db.execute(
-                select(RefreshToken).where(RefreshToken.token == request.refresh_token)
+                select(RefreshToken).where(RefreshToken.token_hash == hash_one_time_token(request.refresh_token))
             )
             refresh_token_record = result.scalar_one_or_none()
 
             if refresh_token_record:
-                refresh_token_record.is_revoked = True
+                await revoke_session(db, refresh_token_record.session_id, refresh_token_record.user_id)
 
                 # Get admin user for logging
                 admin_user = await db.get(User, refresh_token_record.user_id)
                 if admin_user:
-                    logger.info(f"Admin user logged out: {admin_user.email}")
+                    logger.info("Admin logout succeeded user_id=%s", admin_user.id)
                     await create_admin_session_log(admin_user, "admin_logout_single_session")
 
             await db.commit()
@@ -249,8 +261,8 @@ async def admin_logout(
                 "timestamp": datetime.now().isoformat()
             }
 
-    except Exception as e:
-        logger.error(f"Admin logout failed: {e}")
+    except Exception as exc:
+        logger.error("Admin logout failed exception_type=%s", type(exc).__name__)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Admin logout failed"
@@ -267,75 +279,31 @@ async def admin_refresh_token(
     """Refresh admin access token"""
 
     try:
-        from app.utils.security import verify_token
-
-        # Verify refresh token
-        payload = verify_token(request.refresh_token)
-        if not payload or payload.get("type") != "refresh":
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid admin refresh token"
-            )
-
-        user_id = payload.get("sub")
-        is_admin = payload.get("is_admin", False)
-
-        if not is_admin:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Admin refresh token required"
-            )
-
-        # Check if refresh token exists and is not revoked
-        result = await db.execute(
-            select(RefreshToken).where(
-                RefreshToken.token == request.refresh_token,
-                RefreshToken.user_id == user_id,
-                RefreshToken.is_revoked == False
-            )
-        )
-        refresh_token_record = result.scalar_one_or_none()
-
-        if not refresh_token_record or refresh_token_record.expires_at < datetime.utcnow():
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Admin refresh token expired or revoked"
-            )
-
-        # Get admin user
-        admin_user = await db.get(User, user_id)
-        if not admin_user or not admin_user.is_active or not _is_admin_user(admin_user):
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Admin user not found or inactive"
-            )
-
-        # Create new admin access token
-        token_payload = {
-            "sub": admin_user.id,
-            "email": admin_user.email,
-            "role": admin_user.role,
-            "is_admin": True,
-            "session_type": "admin"
-        }
-
-        access_token = create_access_token(token_payload)
+        tokens = await rotate_refresh_token(db, request.refresh_token)
+        payload = verify_token(tokens.access_token)
+        admin_user = await db.get(User, payload["sub"] if payload else None)
+        if admin_user is None or not _is_admin_user(admin_user):
+            if admin_user is not None:
+                await revoke_session(db, tokens.session_id, admin_user.id)
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin privileges required")
 
         # Log token refresh
         await create_admin_session_log(admin_user, "admin_token_refresh")
 
         return {
-            "access_token": access_token,
-            "refresh_token": refresh_token,
+            "access_token": tokens.access_token,
+            "refresh_token": tokens.refresh_token,
             "token_type": "bearer",
             "expires_in": settings.JWT_ACCESS_TOKEN_EXPIRE_MINUTES * 60,
             "admin_role": admin_user.role
         }
 
+    except (InvalidRefreshToken, RefreshTokenReuseDetected) as exc:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid admin refresh token") from exc
     except HTTPException:
         raise
-    except Exception as e:
-        logger.error(f"Admin token refresh failed: {e}")
+    except Exception as exc:
+        logger.error("Admin token refresh failed exception_type=%s", type(exc).__name__)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Admin token refresh failed"
@@ -375,8 +343,8 @@ async def get_admin_session_info(
 
         return session_info
 
-    except Exception as e:
-        logger.error(f"Failed to get admin session info: {e}")
+    except Exception as exc:
+        logger.error("Failed to get admin session info exception_type=%s", type(exc).__name__)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to retrieve admin session information"
@@ -421,12 +389,16 @@ async def _log_admin_security_event(event_type: str, details: Dict[str, Any]):
         security_log = {
             "event_type": event_type,
             "timestamp": datetime.now().isoformat(),
-            "details": details,
+            "details": {
+                key: value
+                for key, value in details.items()
+                if key in {"reason", "user_id", "user_role", "timestamp"}
+            },
             "source": "admin_auth"
         }
 
         # TODO: Store in security audit table
-        logger.warning(f"ADMIN_SECURITY_EVENT: {security_log}")
+        logger.warning("ADMIN_SECURITY_EVENT: %s", security_log)
 
-    except Exception as e:
-        logger.error(f"Failed to log admin security event: {e}")
+    except Exception as exc:
+        logger.error("Failed to log admin security event exception_type=%s", type(exc).__name__)

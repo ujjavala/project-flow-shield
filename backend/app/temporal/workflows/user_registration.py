@@ -41,8 +41,8 @@ class UserRegistrationWorkflow:
                 start_to_close_timeout=timedelta(minutes=2)
             )
             
-            # Step 3: Log verification link (skip email sending for now due to timeout issues)
-            logger.info(f"Verification link: http://localhost:3000/verify-email?token={verification_token}")
+            # Never emit one-time credentials into logs.
+            logger.info("Verification token generated for registered user")
             email_sent = False  # Skip email sending for now
             
             logger.info(f"User registration workflow completed for {registration_data.email}")
@@ -98,7 +98,7 @@ class EmailVerificationWorkflow:
             }
             
         except Exception as e:
-            logger.error(f"Email verification workflow failed for token {verification_token}: {e}")
+            logger.error(f"Email verification workflow failed: {e}")
             return {
                 "success": False,
                 "error": str(e),

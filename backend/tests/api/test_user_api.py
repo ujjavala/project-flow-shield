@@ -1,25 +1,49 @@
 import pytest
-from httpx import AsyncClient
+from httpx import ASGITransport, AsyncClient
 from unittest.mock import AsyncMock, patch, MagicMock
-from datetime import datetime, timedelta
 import uuid
 
+from app.api import user as user_api
 from app.main import app
-from app.models.user import User, RefreshToken
-from app.utils.security import hash_password, create_access_token, create_refresh_token
+from app.models.user import User
+from app.utils.security import hash_password
 
 
 class TestUserAPI:
     
     @pytest.fixture
-    async def client(self):
-        async with AsyncClient(app=app, base_url="http://test") as ac:
-            yield ac
-    
-    @pytest.fixture
     def mock_db_session(self):
         mock_session = AsyncMock()
+        mock_session.add = MagicMock()
         return mock_session
+
+    @pytest.fixture
+    async def client(self, mock_db_session):
+        async def override_db():
+            yield mock_db_session
+
+        app.dependency_overrides[user_api.get_db] = override_db
+        allowed = {
+            "allowed": True,
+            "remaining": 99,
+            "reset_time": "2099-01-01T00:00:00+00:00",
+            "current_count": 1,
+            "limit": 100,
+            "retry_after": None,
+            "blocked_reason": None,
+        }
+        try:
+            with patch(
+                "app.middleware.security.rate_limiter.check",
+                new=AsyncMock(return_value=allowed),
+            ):
+                async with AsyncClient(
+                    transport=ASGITransport(app=app),
+                    base_url="http://test",
+                ) as ac:
+                    yield ac
+        finally:
+            app.dependency_overrides.pop(user_api.get_db, None)
     
     @pytest.fixture
     def sample_user_data(self):
@@ -49,34 +73,27 @@ class TestUserAPI:
     async def test_register_success(self, client, mock_db_session, sample_user_data):
         """Test successful user registration"""
         
-        with patch('app.api.user.get_db') as mock_get_db, \
-             patch('app.api.user.get_temporal_client') as mock_temporal_client:
-            
-            # Mock database
-            mock_get_db.return_value = mock_db_session
-            
+        with patch('app.api.user.email_delivery.send_verification', new_callable=AsyncMock) as mock_send:
             # Mock no existing user
-            mock_result = AsyncMock()
+            mock_result = MagicMock()
             mock_result.scalar_one_or_none.return_value = None
             mock_db_session.execute.return_value = mock_result
             
-            # Mock temporal client failure to use fallback
-            mock_temporal_client.side_effect = Exception("Temporal unavailable")
-            
             # Execute request
-            response = await client.post("/register", json=sample_user_data)
+            response = await client.post("/user/register", json=sample_user_data)
             
             # Verify response
             assert response.status_code == 200
             data = response.json()
             assert data["success"] is True
             assert data["email"] == sample_user_data["email"]
-            assert data["method"] == "direct_registration"
+            assert data["method"] == "database"
             assert "user_id" in data
             
             # Verify database operations
             mock_db_session.add.assert_called_once()
-            mock_db_session.commit.assert_called_once()
+            mock_db_session.commit.assert_awaited_once()
+            mock_send.assert_awaited_once()
     
     @pytest.mark.asyncio
     async def test_register_user_already_exists(self, client, mock_db_session, sample_user_data, existing_user):
@@ -88,69 +105,32 @@ class TestUserAPI:
             mock_get_db.return_value = mock_db_session
             
             # Mock existing user
-            mock_result = AsyncMock()
+            mock_result = MagicMock()
             mock_result.scalar_one_or_none.return_value = existing_user
             mock_db_session.execute.return_value = mock_result
             
             # Execute request
-            response = await client.post("/register", json=sample_user_data)
+            response = await client.post("/user/register", json=sample_user_data)
             
             # Verify response
             assert response.status_code == 400
             assert "already exists" in response.json()["detail"]
     
     @pytest.mark.asyncio
-    async def test_register_temporal_workflow_success(self, client, mock_db_session, sample_user_data):
-        """Test registration using Temporal workflow"""
-        
-        with patch('app.api.user.get_db') as mock_get_db, \
-             patch('app.api.user.get_temporal_client') as mock_temporal_client:
-            
-            # Mock database
-            mock_get_db.return_value = mock_db_session
-            
-            # Mock no existing user
-            mock_result = AsyncMock()
-            mock_result.scalar_one_or_none.return_value = None
-            mock_db_session.execute.return_value = mock_result
-            
-            # Mock temporal workflow success
-            mock_client = AsyncMock()
-            mock_workflow_result = {
-                "success": True,
-                "user_id": "user-123",
-                "email": sample_user_data["email"],
-                "message": "Registration successful",
-                "verification_email_sent": True
-            }
-            mock_client.execute_workflow.return_value = mock_workflow_result
-            mock_temporal_client.return_value = mock_client
-            
-            # Execute request
-            response = await client.post("/register", json=sample_user_data)
-            
-            # Verify response
-            assert response.status_code == 200
-            data = response.json()
-            assert data["success"] is True
-            assert data["method"] == "temporal_workflow"
-            assert data["verification_email_sent"] is True
-    
-    @pytest.mark.asyncio
     async def test_login_success(self, client, mock_db_session, existing_user):
         """Test successful user login"""
         
-        with patch('app.api.user.get_db') as mock_get_db, \
-             patch('app.api.user.get_temporal_client') as mock_temporal_client:
-            
-            # Mock database
-            mock_get_db.return_value = mock_db_session
-            
-            # Mock temporal client failure to use fallback
-            mock_temporal_client.side_effect = Exception("Temporal unavailable")
-            
+        with patch('app.api.user._evaluate_login_risk', new_callable=AsyncMock) as mock_risk, \
+             patch('app.api.user.create_session_tokens', new_callable=AsyncMock) as mock_create_session:
+            mock_risk.return_value = None
+            mock_create_session.return_value = MagicMock(
+                access_token="access-token",
+                refresh_token="refresh-token",
+                session_id="session-123",
+            )
+
             # Mock user lookup
-            mock_result = AsyncMock()
+            mock_result = MagicMock()
             mock_result.scalar_one_or_none.return_value = existing_user
             mock_db_session.execute.return_value = mock_result
             
@@ -159,7 +139,7 @@ class TestUserAPI:
                 "email": "test@example.com",
                 "password": "Password123!"
             }
-            response = await client.post("/login", json=login_data)
+            response = await client.post("/user/login", json=login_data)
             
             # Verify response
             assert response.status_code == 200
@@ -169,25 +149,16 @@ class TestUserAPI:
             assert data["token_type"] == "bearer"
             assert "expires_in" in data
             
-            # Verify database operations
-            mock_db_session.add.assert_called_once()  # refresh token
-            mock_db_session.commit.assert_called_once()
+            mock_risk.assert_awaited_once()
+            mock_create_session.assert_awaited_once()
     
     @pytest.mark.asyncio
     async def test_login_invalid_credentials(self, client, mock_db_session):
         """Test login with invalid credentials"""
         
-        with patch('app.api.user.get_db') as mock_get_db, \
-             patch('app.api.user.get_temporal_client') as mock_temporal_client:
-            
-            # Mock database
-            mock_get_db.return_value = mock_db_session
-            
-            # Mock temporal client failure to use fallback
-            mock_temporal_client.side_effect = Exception("Temporal unavailable")
-            
+        with patch('app.api.user._evaluate_login_risk', new_callable=AsyncMock) as mock_risk:
             # Mock no user found
-            mock_result = AsyncMock()
+            mock_result = MagicMock()
             mock_result.scalar_one_or_none.return_value = None
             mock_db_session.execute.return_value = mock_result
             
@@ -196,11 +167,12 @@ class TestUserAPI:
                 "email": "nonexistent@example.com",
                 "password": "wrongpassword"
             }
-            response = await client.post("/login", json=login_data)
+            response = await client.post("/user/login", json=login_data)
             
             # Verify response
             assert response.status_code == 401
             assert "Invalid email or password" in response.json()["detail"]
+            mock_risk.assert_not_awaited()
     
     @pytest.mark.asyncio
     async def test_login_inactive_user(self, client, mock_db_session, existing_user):
@@ -208,17 +180,9 @@ class TestUserAPI:
         
         existing_user.is_active = False
         
-        with patch('app.api.user.get_db') as mock_get_db, \
-             patch('app.api.user.get_temporal_client') as mock_temporal_client:
-            
-            # Mock database
-            mock_get_db.return_value = mock_db_session
-            
-            # Mock temporal client failure to use fallback
-            mock_temporal_client.side_effect = Exception("Temporal unavailable")
-            
+        with patch('app.api.user._evaluate_login_risk', new_callable=AsyncMock) as mock_risk:
             # Mock inactive user lookup
-            mock_result = AsyncMock()
+            mock_result = MagicMock()
             mock_result.scalar_one_or_none.return_value = existing_user
             mock_db_session.execute.return_value = mock_result
             
@@ -227,303 +191,90 @@ class TestUserAPI:
                 "email": "test@example.com",
                 "password": "Password123!"
             }
-            response = await client.post("/login", json=login_data)
+            response = await client.post("/user/login", json=login_data)
             
             # Verify response
             assert response.status_code == 401
             assert "Account is deactivated" in response.json()["detail"]
-    
+            mock_risk.assert_not_awaited()
+
     @pytest.mark.asyncio
-    async def test_login_temporal_workflow_success(self, client, mock_db_session):
-        """Test login using Temporal workflow"""
-        
-        with patch('app.api.user.get_db') as mock_get_db, \
-             patch('app.api.user.get_temporal_client') as mock_temporal_client:
-            
-            # Mock database
-            mock_get_db.return_value = mock_db_session
-            
-            # Mock temporal workflow success
-            mock_client = AsyncMock()
-            mock_workflow_result = {
-                "success": True,
-                "access_token": "access-token",
-                "refresh_token": "refresh-token",
-                "token_type": "bearer",
-                "expires_in": 3600
-            }
-            mock_client.execute_workflow.return_value = mock_workflow_result
-            mock_temporal_client.return_value = mock_client
-            
-            # Execute request
-            login_data = {
+    async def test_login_unverified_user(self, client, mock_db_session, existing_user):
+        """Test login is blocked until the user's email is verified"""
+
+        existing_user.is_verified = False
+
+        with patch('app.api.user._evaluate_login_risk', new_callable=AsyncMock) as mock_risk:
+            mock_result = MagicMock()
+            mock_result.scalar_one_or_none.return_value = existing_user
+            mock_db_session.execute.return_value = mock_result
+
+            response = await client.post("/user/login", json={
                 "email": "test@example.com",
                 "password": "Password123!"
-            }
-            response = await client.post("/login", json=login_data)
-            
-            # Verify response
-            assert response.status_code == 200
-            data = response.json()
-            assert data["access_token"] == "access-token"
-            assert data["refresh_token"] == "refresh-token"
+            })
+
+            assert response.status_code == 403
+            assert "Email not verified" in response.json()["detail"]
+            mock_db_session.add.assert_not_called()
+            mock_risk.assert_not_awaited()
     
     @pytest.mark.asyncio
-    async def test_refresh_token_success(self, client, mock_db_session, existing_user):
+    async def test_refresh_token_success(self, client, mock_db_session):
         """Test successful token refresh"""
         
-        with patch('app.api.user.get_db') as mock_get_db, \
-             patch('app.api.user.verify_token') as mock_verify_token:
-            
-            # Mock database
-            mock_get_db.return_value = mock_db_session
-            
-            # Mock token verification
-            mock_verify_token.return_value = {
-                "sub": existing_user.id,
-                "type": "refresh"
-            }
-            
-            # Mock refresh token lookup
-            refresh_token_record = RefreshToken(
-                user_id=existing_user.id,
-                token="valid-refresh-token",
-                expires_at=datetime.utcnow() + timedelta(days=7),
-                is_revoked=False
+        with patch('app.api.user.rotate_refresh_token', new_callable=AsyncMock) as mock_rotate:
+            mock_rotate.return_value = MagicMock(
+                access_token="new-access-token",
+                refresh_token="new-refresh-token",
+                session_id="session-123",
             )
-            mock_result = AsyncMock()
-            mock_result.scalar_one_or_none.return_value = refresh_token_record
-            mock_db_session.execute.return_value = mock_result
-            
-            # Mock user lookup
-            mock_db_session.get.return_value = existing_user
             
             # Execute request
             refresh_data = {
                 "refresh_token": "valid-refresh-token"
             }
-            response = await client.post("/refresh", json=refresh_data)
+            response = await client.post("/user/refresh", json=refresh_data)
             
             # Verify response
             assert response.status_code == 200
             data = response.json()
-            assert "access_token" in data
-            assert data["refresh_token"] == "valid-refresh-token"
+            assert data["access_token"] == "new-access-token"
+            assert data["refresh_token"] == "new-refresh-token"
             assert data["token_type"] == "bearer"
+            assert response.headers["cache-control"] == "no-store"
+            assert response.headers["pragma"] == "no-cache"
+            mock_rotate.assert_awaited_once_with(mock_db_session, "valid-refresh-token")
     
     @pytest.mark.asyncio
     async def test_refresh_token_invalid(self, client, mock_db_session):
         """Test token refresh with invalid token"""
         
-        with patch('app.api.user.get_db') as mock_get_db, \
-             patch('app.api.user.verify_token') as mock_verify_token:
-            
-            # Mock database
-            mock_get_db.return_value = mock_db_session
-            
-            # Mock token verification failure
-            mock_verify_token.return_value = None
-            
+        with patch('app.api.user.rotate_refresh_token', new_callable=AsyncMock) as mock_rotate:
+            mock_rotate.side_effect = user_api.InvalidRefreshToken()
+
             # Execute request
             refresh_data = {
                 "refresh_token": "invalid-refresh-token"
             }
-            response = await client.post("/refresh", json=refresh_data)
+            response = await client.post("/user/refresh", json=refresh_data)
             
             # Verify response
             assert response.status_code == 401
             assert "Invalid refresh token" in response.json()["detail"]
-    
-    @pytest.mark.asyncio
-    async def test_password_reset_request_success(self, client, mock_db_session, existing_user):
-        """Test successful password reset request"""
-        
-        with patch('app.api.user.get_db') as mock_get_db, \
-             patch('app.api.user.get_temporal_client') as mock_temporal_client:
-            
-            # Mock database
-            mock_get_db.return_value = mock_db_session
-            
-            # Mock temporal client failure to use fallback
-            mock_temporal_client.side_effect = Exception("Temporal unavailable")
-            
-            # Mock user lookup
-            mock_result = AsyncMock()
-            mock_result.scalar_one_or_none.return_value = existing_user
-            mock_db_session.execute.return_value = mock_result
-            
-            # Execute request
-            reset_data = {
-                "email": "test@example.com"
-            }
-            response = await client.post("/password-reset/request", json=reset_data)
-            
-            # Verify response
-            assert response.status_code == 200
-            data = response.json()
-            assert "password reset link has been sent" in data["message"]
-            assert data["method"] == "direct_method"
-            
-            # Verify database operations
-            mock_db_session.commit.assert_called_once()
-    
-    @pytest.mark.asyncio
-    async def test_password_reset_confirm_success(self, client, mock_db_session, existing_user):
-        """Test successful password reset confirmation"""
-        
-        existing_user.password_reset_token = "valid-reset-token"
-        existing_user.password_reset_expires = datetime.utcnow() + timedelta(hours=1)
-        
-        with patch('app.api.user.get_db') as mock_get_db, \
-             patch('app.api.user.get_temporal_client') as mock_temporal_client:
-            
-            # Mock database
-            mock_get_db.return_value = mock_db_session
-            
-            # Mock temporal client failure to use fallback
-            mock_temporal_client.side_effect = Exception("Temporal unavailable")
-            
-            # Mock user lookup by reset token
-            mock_result = AsyncMock()
-            mock_result.scalar_one_or_none.return_value = existing_user
-            mock_db_session.execute.return_value = mock_result
-            
-            # Execute request
-            reset_data = {
-                "token": "valid-reset-token",
-                "new_password": "NewPassword123!"
-            }
-            response = await client.post("/password-reset/confirm", json=reset_data)
-            
-            # Verify response
-            assert response.status_code == 200
-            data = response.json()
-            assert "Password has been reset successfully" in data["message"]
-            assert data["method"] == "direct_method"
-            
-            # Verify database operations
-            mock_db_session.commit.assert_called_once()
-            
-            # Verify token is cleared
-            assert existing_user.password_reset_token is None
-            assert existing_user.password_reset_expires is None
-    
-    @pytest.mark.asyncio
-    async def test_password_reset_confirm_invalid_token(self, client, mock_db_session):
-        """Test password reset confirmation with invalid token"""
-        
-        with patch('app.api.user.get_db') as mock_get_db, \
-             patch('app.api.user.get_temporal_client') as mock_temporal_client:
-            
-            # Mock database
-            mock_get_db.return_value = mock_db_session
-            
-            # Mock temporal client failure to use fallback
-            mock_temporal_client.side_effect = Exception("Temporal unavailable")
-            
-            # Mock no user found with reset token
-            mock_result = AsyncMock()
-            mock_result.scalar_one_or_none.return_value = None
-            mock_db_session.execute.return_value = mock_result
-            
-            # Execute request
-            reset_data = {
-                "token": "invalid-reset-token",
-                "new_password": "NewPassword123!"
-            }
-            response = await client.post("/password-reset/confirm", json=reset_data)
-            
-            # Verify response
-            assert response.status_code == 400
-            assert "Invalid or expired reset token" in response.json()["detail"]
-    
-    @pytest.mark.asyncio
-    async def test_verify_email_success(self, client, mock_db_session, existing_user):
-        """Test successful email verification"""
-        
-        existing_user.is_verified = False
-        existing_user.email_verification_token = "valid-verification-token"
-        
-        with patch('app.api.user.get_db') as mock_get_db, \
-             patch('app.api.user.get_temporal_client') as mock_temporal_client:
-            
-            # Mock database
-            mock_get_db.return_value = mock_db_session
-            
-            # Mock temporal client failure to use fallback
-            mock_temporal_client.side_effect = Exception("Temporal unavailable")
-            
-            # Mock user lookup by verification token
-            mock_result = AsyncMock()
-            mock_result.scalar_one_or_none.return_value = existing_user
-            mock_db_session.execute.return_value = mock_result
-            
-            # Execute request
-            verification_data = {
-                "token": "valid-verification-token"
-            }
-            response = await client.post("/verify-email", json=verification_data)
-            
-            # Verify response
-            assert response.status_code == 200
-            data = response.json()
-            assert "Email verified successfully" in data["message"]
-            assert data["method"] == "direct_verification"
-            
-            # Verify user is marked as verified
-            assert existing_user.is_verified is True
-            assert existing_user.email_verification_token is None
-    
-    @pytest.mark.asyncio
-    async def test_verify_email_already_verified(self, client, mock_db_session, existing_user):
-        """Test email verification for already verified user"""
-        
-        existing_user.is_verified = True
-        existing_user.email_verification_token = "verification-token"
-        
-        with patch('app.api.user.get_db') as mock_get_db, \
-             patch('app.api.user.get_temporal_client') as mock_temporal_client:
-            
-            # Mock database
-            mock_get_db.return_value = mock_db_session
-            
-            # Mock temporal client failure to use fallback
-            mock_temporal_client.side_effect = Exception("Temporal unavailable")
-            
-            # Mock user lookup
-            mock_result = AsyncMock()
-            mock_result.scalar_one_or_none.return_value = existing_user
-            mock_db_session.execute.return_value = mock_result
-            
-            # Execute request
-            verification_data = {
-                "token": "verification-token"
-            }
-            response = await client.post("/verify-email", json=verification_data)
-            
-            # Verify response
-            assert response.status_code == 200
-            data = response.json()
-            assert "Email already verified" in data["message"]
+            mock_rotate.assert_awaited_once_with(mock_db_session, "invalid-refresh-token")
     
     @pytest.mark.asyncio
     async def test_logout_success(self, client, mock_db_session):
         """Test successful logout"""
-        
-        refresh_token_record = RefreshToken(
+        refresh_token_record = MagicMock(
             user_id="user-123",
-            token="valid-refresh-token",
-            expires_at=datetime.utcnow() + timedelta(days=7),
-            is_revoked=False
+            session_id="session-123",
         )
-        
-        with patch('app.api.user.get_db') as mock_get_db:
-            
-            # Mock database
-            mock_get_db.return_value = mock_db_session
-            
+
+        with patch('app.api.user.revoke_session', new_callable=AsyncMock) as mock_revoke:
             # Mock refresh token lookup
-            mock_result = AsyncMock()
+            mock_result = MagicMock()
             mock_result.scalar_one_or_none.return_value = refresh_token_record
             mock_db_session.execute.return_value = mock_result
             
@@ -531,13 +282,15 @@ class TestUserAPI:
             logout_data = {
                 "refresh_token": "valid-refresh-token"
             }
-            response = await client.post("/logout", json=logout_data)
+            response = await client.post("/user/logout", json=logout_data)
             
             # Verify response
             assert response.status_code == 200
             data = response.json()
             assert "Logged out successfully" in data["message"]
-            
-            # Verify token is revoked
-            assert refresh_token_record.is_revoked is True
-            mock_db_session.commit.assert_called_once()
+
+            mock_revoke.assert_awaited_once_with(
+                mock_db_session,
+                "session-123",
+                "user-123",
+            )

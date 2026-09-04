@@ -1,0 +1,11 @@
+apiVersion: 1
+
+providers:
+  - name: FlowShield
+    orgId: 1
+    folder: FlowShield
+    type: file
+    disableDeletion: true
+    editable: false
+    options:
+      path: /var/lib/grafana/dashboards

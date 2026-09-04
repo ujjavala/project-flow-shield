@@ -66,7 +66,7 @@ class TestAuthActivities:
             mock_session_class.return_value.__aenter__.return_value = mock_session
             
             # Mock query result
-            mock_result = AsyncMock()
+            mock_result = MagicMock()
             mock_result.scalar_one_or_none.return_value = mock_user
             mock_session.execute.return_value = mock_result
             
@@ -85,7 +85,7 @@ class TestAuthActivities:
             mock_session_class.return_value.__aenter__.return_value = mock_session
             
             # Mock query result - no user found
-            mock_result = AsyncMock()
+            mock_result = MagicMock()
             mock_result.scalar_one_or_none.return_value = None
             mock_session.execute.return_value = mock_result
             
@@ -108,7 +108,7 @@ class TestAuthActivities:
             mock_session_class.return_value.__aenter__.return_value = mock_session
             
             # Mock query result
-            mock_result = AsyncMock()
+            mock_result = MagicMock()
             mock_result.scalar_one_or_none.return_value = mock_user
             mock_session.execute.return_value = mock_result
             
@@ -136,7 +136,7 @@ class TestAuthActivities:
             mock_session_class.return_value.__aenter__.return_value = mock_session
             
             # Mock query result
-            mock_result = AsyncMock()
+            mock_result = MagicMock()
             mock_result.scalar_one_or_none.return_value = mock_user
             mock_session.execute.return_value = mock_result
             
@@ -161,7 +161,7 @@ class TestAuthActivities:
             mock_session_class.return_value.__aenter__.return_value = mock_session
             
             # Mock query result - no user found
-            mock_result = AsyncMock()
+            mock_result = MagicMock()
             mock_result.scalar_one_or_none.return_value = None
             mock_session.execute.return_value = mock_result
             
@@ -171,6 +171,32 @@ class TestAuthActivities:
             # Verify result
             assert result["success"] is False
             assert result["error"] == "Invalid credentials"
+
+    @pytest.mark.asyncio
+    async def test_authenticate_user_rejects_unverified_account(self, auth_activities):
+        """Test authentication rejects a user whose email is unverified"""
+
+        mock_user = MagicMock()
+        mock_user.email = "test@example.com"
+        mock_user.is_active = True
+        mock_user.is_verified = False
+        mock_user.hashed_password = "hashed-password"
+
+        with patch('app.temporal.activities.auth.AsyncSessionLocal') as mock_session_class, \
+             patch('app.temporal.activities.auth.verify_password') as mock_verify:
+
+            mock_session = AsyncMock()
+            mock_session_class.return_value.__aenter__.return_value = mock_session
+
+            mock_result = MagicMock()
+            mock_result.scalar_one_or_none.return_value = mock_user
+            mock_session.execute.return_value = mock_result
+            mock_verify.return_value = True
+
+            result = await auth_activities.authenticate_user("test@example.com", "password")
+
+            assert result["success"] is False
+            assert result["error"].startswith("Email not verified")
     
     @pytest.mark.asyncio
     async def test_authenticate_user_wrong_password(self, auth_activities):
@@ -187,7 +213,7 @@ class TestAuthActivities:
             mock_session_class.return_value.__aenter__.return_value = mock_session
             
             # Mock query result
-            mock_result = AsyncMock()
+            mock_result = MagicMock()
             mock_result.scalar_one_or_none.return_value = mock_user
             mock_session.execute.return_value = mock_result
             
@@ -217,7 +243,7 @@ class TestAuthActivities:
             mock_session_class.return_value.__aenter__.return_value = mock_session
             
             # Mock query result
-            mock_result = AsyncMock()
+            mock_result = MagicMock()
             mock_result.scalar_one_or_none.return_value = mock_user
             mock_session.execute.return_value = mock_result
             
@@ -256,53 +282,15 @@ class TestAuthActivities:
     
     @pytest.mark.asyncio
     async def test_store_login_session(self, auth_activities):
-        """Test storing login session"""
-        
-        mock_user = MagicMock()
-        mock_user.email = "test@example.com"
-        mock_user.last_login = None
-        
-        with patch('app.temporal.activities.auth.AsyncSessionLocal') as mock_session_class, \
-             patch('app.temporal.activities.auth.datetime') as mock_datetime:
-            
-            mock_session = AsyncMock()
-            mock_session_class.return_value.__aenter__.return_value = mock_session
-            
-            # Mock user retrieval
-            mock_session.get.return_value = mock_user
-            
-            # Mock datetime
-            mock_now = datetime(2023, 1, 1, 12, 0, 0)
-            mock_datetime.utcnow.return_value = mock_now
-            
-            # Execute activity
-            result = await auth_activities.store_login_session("user-123", "refresh-token")
-            
-            # Verify result
-            assert result["success"] is True
-            assert result["last_login"] == mock_now.isoformat()
-            
-            # Verify database operations
-            mock_session.add.assert_called_once()
-            mock_session.commit.assert_called_once()
-            
-            # Verify user last_login update
-            assert mock_user.last_login == mock_now
+        """Credential-bearing session persistence is prohibited in Temporal history."""
+        with pytest.raises(RuntimeError, match="persistence is disabled"):
+            await auth_activities.store_login_session("user-123", "refresh-token")
     
     @pytest.mark.asyncio
     async def test_store_login_session_user_not_found(self, auth_activities):
-        """Test storing login session when user not found"""
-        
-        with patch('app.temporal.activities.auth.AsyncSessionLocal') as mock_session_class:
-            mock_session = AsyncMock()
-            mock_session_class.return_value.__aenter__.return_value = mock_session
-            
-            # Mock user not found
-            mock_session.get.return_value = None
-            
-            # Execute activity and expect exception
-            with pytest.raises(ValueError, match="User not found"):
-                await auth_activities.store_login_session("nonexistent-user", "refresh-token")
+        """The prohibition does not depend on whether a supplied user exists."""
+        with pytest.raises(RuntimeError, match="persistence is disabled"):
+            await auth_activities.store_login_session("nonexistent-user", "refresh-token")
     
     @pytest.mark.asyncio
     async def test_generate_oauth_authorization_code(self, auth_activities):

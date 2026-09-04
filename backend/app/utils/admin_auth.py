@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database.connection import get_db
 from app.models.user import User
-from app.utils.security import verify_token
+from app.services.principal_service import resolve_access_principal
 
 logger = logging.getLogger(__name__)
 admin_security = HTTPBearer()
@@ -34,64 +34,31 @@ async def get_admin_user(
     Raises HTTPException if not authenticated or not an admin
     """
 
-    if not credentials:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Admin authentication required",
-            headers={"WWW-Authenticate": "Bearer"}
-        )
-
     try:
-        # Verify JWT token
-        payload = verify_token(credentials.credentials)
-        if not payload:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid or expired admin token",
-                headers={"WWW-Authenticate": "Bearer"}
-            )
-
-        user_id = payload.get("sub")
-        if not user_id:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid admin token payload",
-                headers={"WWW-Authenticate": "Bearer"}
-            )
-
-        # Get user from database
-        user = await db.get(User, user_id)
-        if not user:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Admin user not found",
-                headers={"WWW-Authenticate": "Bearer"}
-            )
-
-        if not user.is_active:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Admin account is inactive",
-                headers={"WWW-Authenticate": "Bearer"}
-            )
+        principal = await resolve_access_principal(
+            credentials.credentials if credentials else None,
+            db,
+            require_admin_session=True,
+        )
+        user = principal.user
 
         # Check admin role
         if not _is_admin_user(user):
-            logger.warning(f"Non-admin user {user.email} attempted to access admin functionality")
+            logger.warning("Admin access denied user_id=%s reason=non_admin", user.id)
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Admin privileges required. Access denied."
             )
 
         # Log admin access
-        logger.info(f"Admin user {user.email} (role: {user.role}) authenticated successfully")
+        logger.info("Admin authentication succeeded user_id=%s role=%s", user.id, user.role)
 
         return user
 
     except HTTPException:
         raise
-    except Exception as e:
-        logger.error(f"Admin authentication failed: {e}")
+    except Exception as exc:
+        logger.error("Admin authentication failed exception_type=%s", type(exc).__name__)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Admin authentication failed",
@@ -112,13 +79,13 @@ async def get_super_admin_user(
 
     # Check for super admin privileges
     if not admin_user.is_superuser:
-        logger.warning(f"Admin user {admin_user.email} attempted to access super admin functionality")
+        logger.warning("Super-admin access denied user_id=%s", admin_user.id)
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Super admin privileges required. Access denied."
         )
 
-    logger.info(f"Super admin user {admin_user.email} authenticated successfully")
+    logger.info("Super-admin authentication succeeded user_id=%s", admin_user.id)
     return admin_user
 
 def require_admin_role(required_role: str = "admin"):
@@ -137,8 +104,12 @@ def require_admin_role(required_role: str = "admin"):
 
         # Check specific role requirement
         if not _has_required_role(admin_user, required_role):
-            logger.warning(f"Admin user {admin_user.email} (role: {admin_user.role}) "
-                         f"attempted to access {required_role}-only functionality")
+            logger.warning(
+                "Admin role denied user_id=%s current_role=%s required_role=%s",
+                admin_user.id,
+                admin_user.role,
+                required_role,
+            )
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail=f"Role '{required_role}' required. Current role: '{admin_user.role}'"
@@ -182,19 +153,18 @@ async def create_admin_session_log(admin_user: User, action: str, details: Optio
         log_entry = {
             'timestamp': datetime.now().isoformat(),
             'admin_user_id': admin_user.id,
-            'admin_email': admin_user.email,
             'admin_role': admin_user.role,
             'action': action,
-            'details': details or {},
+            'detail_keys': sorted((details or {}).keys()),
             'session_type': 'admin'
         }
 
         # TODO: Store in proper audit log table
         # For now, just log to application logs
-        logger.info(f"ADMIN_AUDIT: {log_entry}")
+        logger.info("ADMIN_AUDIT: %s", log_entry)
 
-    except Exception as e:
-        logger.error(f"Failed to log admin action: {e}")
+    except Exception as exc:
+        logger.error("Failed to log admin action exception_type=%s", type(exc).__name__)
 
 def validate_admin_api_key(api_key: str) -> bool:
     """

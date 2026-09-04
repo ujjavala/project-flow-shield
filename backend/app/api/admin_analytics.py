@@ -14,6 +14,8 @@ from pydantic import BaseModel, Field
 
 from app.database.connection import get_db
 from app.models.user import User
+from app.config import settings
+from app.utils.admin_auth import get_admin_user, get_super_admin_user
 # AI service import (optional)
 try:
     from app.api.ai_simple import OllamaService
@@ -24,7 +26,11 @@ except ImportError:
 logger = logging.getLogger(__name__)
 
 # Create API router
-router = APIRouter(prefix="/admin", tags=["Admin Analytics"])
+router = APIRouter(
+    prefix="/admin",
+    tags=["Admin Analytics"],
+    dependencies=[Depends(get_admin_user)],
+)
 
 # Response models
 class FraudStats(BaseModel):
@@ -336,13 +342,17 @@ async def get_detailed_ai_health():
         }
 
 @router.post("/fraud-events/simulate")
-async def simulate_fraud_events(count: int = Query(10, description="Number of events to simulate")):
+async def simulate_fraud_events(
+    count: int = Query(10, ge=1, le=100, description="Number of events to simulate"),
+    _super_admin: User | None = Depends(get_super_admin_user),
+):
     """
     Simulate fraud events for testing the dashboard (development only)
     """
+    if settings.ENVIRONMENT.lower() not in {"local", "development", "test"}:
+        raise HTTPException(status_code=404, detail="Not found")
     try:
         import random
-        import time
         
         # Sample email domains and patterns
         domains = ["gmail.com", "yahoo.com", "hotmail.com", "guerrillamail.com", "tempmail.org", "10minutemail.com"]
@@ -391,9 +401,6 @@ async def simulate_fraud_events(count: int = Query(10, description="Number of ev
             success = random.random() > 0.05  # 95% success rate
             add_ai_metric(provider, response_time, success)
             
-            # Small delay between events
-            time.sleep(0.1)
-        
         return {
             "message": f"Successfully simulated {count} fraud events",
             "total_events_now": len(fraud_events),
@@ -407,7 +414,9 @@ async def simulate_fraud_events(count: int = Query(10, description="Number of ev
 
 async def _generate_sample_fraud_data():
     """Generate sample fraud data for demonstration"""
-    await simulate_fraud_events(50)
+    if settings.ENVIRONMENT.lower() not in {"local", "development", "test"}:
+        return
+    await simulate_fraud_events(50, _super_admin=None)
 
 # Hook for real fraud events (called from registration workflow)
 async def record_fraud_event(email: str, fraud_result: Dict[str, Any]):

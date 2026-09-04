@@ -47,8 +47,8 @@ class EmailActivities:
                 )
                 await self.redis_client.ping()
                 logger.info("Email Redis connected successfully")
-            except Exception as e:
-                logger.warning(f"Email Redis connection failed: {e}")
+            except Exception as exc:
+                logger.error("Email Redis connection failed exception_type=%s", type(exc).__name__)
                 self.redis_client = None
         return self.redis_client
     
@@ -57,7 +57,7 @@ class EmailActivities:
         """
         Send email via SMTP with retry capability
         """
-        activity.logger.info(f"Attempting SMTP delivery to {email_request['to_email']}")
+        activity.logger.info("Attempting SMTP delivery")
         
         start_time = datetime.now()
         
@@ -102,7 +102,7 @@ class EmailActivities:
             
             delivery_time = int((datetime.now() - start_time).total_seconds() * 1000)
             
-            activity.logger.info(f"SMTP email delivered successfully to {email_request['to_email']} in {delivery_time}ms")
+            activity.logger.info("SMTP email delivered delivery_time_ms=%s", delivery_time)
             
             return {
                 "success": True,
@@ -113,178 +113,44 @@ class EmailActivities:
                 "fallback_used": False
             }
             
-        except Exception as e:
+        except Exception as exc:
             delivery_time = int((datetime.now() - start_time).total_seconds() * 1000)
-            error_msg = str(e)
-            
-            activity.logger.error(f"SMTP delivery failed for {email_request['to_email']}: {error_msg}")
+            activity.logger.error("SMTP delivery failed exception_type=%s", type(exc).__name__)
             
             return {
                 "success": False,
                 "provider": "smtp",
                 "delivery_time_ms": delivery_time,
-                "error_message": error_msg,
+                "error_message": "SMTP delivery failed",
                 "attempts": 1,
                 "fallback_used": False
             }
     
     @activity.defn(name="send_console_email")
     async def send_console_email(self, email_request: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        Fallback email delivery via console/log output
-        """
-        activity.logger.info(f"Delivering email to console for {email_request['to_email']}")
-        
-        start_time = datetime.now()
-        
-        try:
-            # Create a nicely formatted console output
-            email_output = f"""
-{'='*80}
-📧 EMAIL DELIVERY (Console Fallback)
-{'='*80}
-To: {email_request['to_email']}
-Subject: {email_request['subject']}
-Priority: {email_request.get('priority', 'normal')}
-Template: {email_request.get('template_name', 'generic')}
-Correlation ID: {email_request.get('correlation_id', 'N/A')}
-Timestamp: {datetime.now().isoformat()}
-{'='*80}
-
-{email_request.get('text_content', email_request.get('html_content', 'No content'))}
-
-{'='*80}
-✅ Email delivered via console fallback
-{'='*80}
-            """
-            
-            # Output to both logger and console
-            activity.logger.info(email_output)
-            print(email_output)  # Also print to console for development
-            
-            # Store in Redis for dashboard viewing if available
-            redis_client = await self._get_redis()
-            if redis_client:
-                email_key = f"console_email:{email_request['to_email']}:{int(start_time.timestamp())}"
-                email_data = {
-                    "to_email": email_request["to_email"],
-                    "subject": email_request["subject"],
-                    "content": email_request.get("text_content", email_request.get("html_content", "")),
-                    "delivered_at": datetime.now().isoformat(),
-                    "method": "console"
-                }
-                await redis_client.setex(email_key, 86400, str(email_data))  # Keep for 24 hours
-            
-            delivery_time = int((datetime.now() - start_time).total_seconds() * 1000)
-            
-            return {
-                "success": True,
-                "provider": "console",
-                "delivery_time_ms": delivery_time,
-                "message_id": f"console_{int(start_time.timestamp())}",
-                "attempts": 1,
-                "fallback_used": True
-            }
-            
-        except Exception as e:
-            activity.logger.error(f"Console delivery failed: {e}")
-            return {
-                "success": False,
-                "provider": "console",
-                "delivery_time_ms": int((datetime.now() - start_time).total_seconds() * 1000),
-                "error_message": str(e),
-                "attempts": 1,
-                "fallback_used": True
-            }
+        """Reject the legacy console fallback because message bodies contain secrets."""
+        activity.logger.warning("Console email delivery is disabled for authentication messages")
+        return {
+            "success": False,
+            "provider": "console_disabled",
+            "delivery_time_ms": 0,
+            "error_message": "Console delivery is disabled",
+            "attempts": 0,
+            "fallback_used": False,
+        }
     
     @activity.defn(name="log_verification_link")
     async def log_verification_link(self, email_request: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        Final fallback - extract and log verification link for manual use
-        """
-        activity.logger.info(f"Logging verification link for {email_request['to_email']}")
-        
-        start_time = datetime.now()
-        
-        try:
-            # Extract verification link from content
-            content = email_request.get("text_content", email_request.get("html_content", ""))
-            
-            # Try to find verification link
-            verification_link = None
-            if "verify-email?token=" in content:
-                # Extract the link
-                lines = content.split('\n')
-                for line in lines:
-                    if "verify-email?token=" in line:
-                        # Extract URL from HTML or text
-                        if "href=" in line:
-                            start = line.find('"') + 1
-                            end = line.find('"', start)
-                            verification_link = line[start:end]
-                        else:
-                            verification_link = line.strip()
-                        break
-            
-            if "reset-password?token=" in content:
-                # Extract password reset link
-                lines = content.split('\n')
-                for line in lines:
-                    if "reset-password?token=" in line:
-                        # Extract URL from HTML or text
-                        if "href=" in line:
-                            start = line.find('"') + 1
-                            end = line.find('"', start)
-                            verification_link = line[start:end]
-                        else:
-                            verification_link = line.strip()
-                        break
-            
-            # Log the verification link prominently
-            if verification_link:
-                verification_output = f"""
-🔗 VERIFICATION LINK FOR {email_request['to_email']}:
-{verification_link}
-⏰ Link expires in 24 hours (for verification) or 1 hour (for password reset)
-📧 Email subject: {email_request['subject']}
-"""
-                activity.logger.info(verification_output)
-                print(verification_output)  # Also print to console
-                
-                # Store in Redis for easy access
-                redis_client = await self._get_redis()
-                if redis_client:
-                    link_key = f"verification_link:{email_request['to_email']}"
-                    link_data = {
-                        "email": email_request["to_email"],
-                        "link": verification_link,
-                        "subject": email_request["subject"],
-                        "created_at": datetime.now().isoformat()
-                    }
-                    await redis_client.setex(link_key, 86400, str(link_data))  # Keep for 24 hours
-            
-            delivery_time = int((datetime.now() - start_time).total_seconds() * 1000)
-            
-            return {
-                "success": True,
-                "provider": "verification_log",
-                "delivery_time_ms": delivery_time,
-                "message_id": f"log_{int(start_time.timestamp())}",
-                "verification_link": verification_link,
-                "attempts": 1,
-                "fallback_used": True
-            }
-            
-        except Exception as e:
-            activity.logger.error(f"Verification link logging failed: {e}")
-            return {
-                "success": False,
-                "provider": "verification_log",
-                "delivery_time_ms": int((datetime.now() - start_time).total_seconds() * 1000),
-                "error_message": str(e),
-                "attempts": 1,
-                "fallback_used": True
-            }
+        """Reject the legacy fallback instead of exposing one-time links."""
+        activity.logger.warning("Verification-link logging is disabled")
+        return {
+            "success": False,
+            "provider": "verification_log_disabled",
+            "delivery_time_ms": 0,
+            "error_message": "Verification-link logging is disabled",
+            "attempts": 0,
+            "fallback_used": False,
+        }
     
     @activity.defn(name="check_password_reset_rate_limit")
     async def check_password_reset_rate_limit(self, data: Dict[str, Any]) -> Dict[str, Any]:
@@ -294,7 +160,7 @@ Timestamp: {datetime.now().isoformat()}
         email = data["email"]
         ip_address = data.get("ip_address", "unknown")
         
-        activity.logger.info(f"Checking password reset rate limit for {email} from {ip_address}")
+        activity.logger.info("Checking password reset rate limit")
         
         try:
             redis_client = await self._get_redis()
@@ -315,7 +181,7 @@ Timestamp: {datetime.now().isoformat()}
             ip_count = int(ip_count)
             
             if email_count >= 3:
-                activity.logger.warning(f"Email rate limit exceeded for {email}: {email_count} attempts")
+                activity.logger.warning("Email rate limit exceeded attempts=%s", email_count)
                 return {
                     "allowed": False,
                     "reason": "email_rate_limit",
@@ -323,7 +189,7 @@ Timestamp: {datetime.now().isoformat()}
                 }
             
             if ip_count >= 10:
-                activity.logger.warning(f"IP rate limit exceeded for {ip_address}: {ip_count} attempts")
+                activity.logger.warning("IP rate limit exceeded attempts=%s", ip_count)
                 return {
                     "allowed": False,
                     "reason": "ip_rate_limit", 
@@ -336,8 +202,8 @@ Timestamp: {datetime.now().isoformat()}
             
             return {"allowed": True}
             
-        except Exception as e:
-            activity.logger.error(f"Rate limit check failed: {e}")
+        except Exception as exc:
+            activity.logger.error("Password reset rate limit check failed exception_type=%s", type(exc).__name__)
             # On error, allow the request
             return {"allowed": True}
     
@@ -346,7 +212,7 @@ Timestamp: {datetime.now().isoformat()}
         """
         Record email delivery metrics for analytics
         """
-        activity.logger.info(f"Recording email metric: {data['email_type']} to {data['recipient']}")
+        activity.logger.info("Recording email metric email_type=%s", data["email_type"])
         
         try:
             redis_client = await self._get_redis()
@@ -365,16 +231,16 @@ Timestamp: {datetime.now().isoformat()}
             
             return {"recorded": True}
             
-        except Exception as e:
-            activity.logger.error(f"Failed to record email metric: {e}")
-            return {"recorded": False, "error": str(e)}
+        except Exception as exc:
+            activity.logger.error("Failed to record email metric exception_type=%s", type(exc).__name__)
+            return {"recorded": False, "error": "metric_recording_failed"}
     
     @activity.defn(name="record_security_event")
     async def record_security_event(self, data: Dict[str, Any]) -> Dict[str, Any]:
         """
         Record security-related events for monitoring
         """
-        activity.logger.info(f"Recording security event: {data['event_type']} for {data['email']}")
+        activity.logger.info("Recording security event event_type=%s", data["event_type"])
         
         try:
             redis_client = await self._get_redis()
@@ -389,9 +255,9 @@ Timestamp: {datetime.now().isoformat()}
             
             return {"recorded": True}
             
-        except Exception as e:
-            activity.logger.error(f"Failed to record security event: {e}")
-            return {"recorded": False, "error": str(e)}
+        except Exception as exc:
+            activity.logger.error("Failed to record security event exception_type=%s", type(exc).__name__)
+            return {"recorded": False, "error": "security_event_recording_failed"}
 
 
 # Global instance

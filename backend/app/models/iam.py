@@ -295,11 +295,14 @@ class IAMRoleRequest(Base):
     requester_id = Column(String, ForeignKey('users.id'), nullable=False)
     target_user_id = Column(String, ForeignKey('users.id'), nullable=False)
     role_id = Column(String, ForeignKey('iam_roles.id'), nullable=False)
+    scope_id = Column(String, ForeignKey('iam_scopes.id'), nullable=True)
+    workflow_id = Column(String(255), nullable=True, unique=True, index=True)
 
     # Request properties
     request_type = Column(String(20), nullable=False)  # assign, remove, modify
     justification = Column(Text, nullable=True)
     duration = Column(Integer, nullable=True)  # Duration in days, None for permanent
+    duration_seconds = Column(Integer, nullable=True)
 
     # Request status
     status = Column(String(20), default='pending')  # pending, approved, denied, expired
@@ -314,6 +317,18 @@ class IAMRoleRequest(Base):
 
     def __repr__(self):
         return f"<IAMRoleRequest(requester={self.requester_id}, status={self.status})>"
+
+
+class IAMOperationEffect(Base):
+    """Immutable idempotency and evidence record for durable IAM operations."""
+    __tablename__ = "iam_operation_effects"
+
+    effect_id = Column(String(255), primary_key=True)
+    request_id = Column(String, ForeignKey('iam_role_requests.id'), nullable=False, index=True)
+    effect_type = Column(String(50), nullable=False)
+    actor_id = Column(String, ForeignKey('users.id'), nullable=True)
+    details = Column(JSON, nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
 class IAMAccessEvaluation(Base):
     """IAM Access Evaluation Model - Caches and tracks access evaluations for performance"""

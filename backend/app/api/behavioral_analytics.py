@@ -5,32 +5,33 @@ Provides behavioral analytics and fraud detection endpoints for both admin and u
 
 import logging
 from datetime import datetime, timedelta
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, Literal
 from fastapi import APIRouter, HTTPException, Depends, Query, Request
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, text
 import json
 
 from app.database.connection import get_db
 from app.models.user import User
-from app.utils.security import get_current_user, get_current_active_user
+from app.api.user_dashboard import get_current_user as get_current_active_user
 from app.utils.admin_auth import get_admin_user, get_super_admin_user
-from app.temporal.client import get_temporal_client
-from app.temporal.workflows.behavioral_analytics_workflow import BehaviorAnalyticsWorkflow
-from app.temporal.types import BehaviorAnalysisRequest
+from app.services.risk_policy_service import (
+    build_login_features,
+    evaluate_and_persist,
+    ollama_shadow_advisor,
+)
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
 # Pydantic models for API requests/responses
 class BehaviorAnalysisRequest(BaseModel):
-    event_type: str = Field(..., description="Type of event (login, action, navigation)")
-    ip_address: Optional[str] = None
-    user_agent: Optional[str] = None
-    geolocation: Optional[Dict[str, Any]] = None
-    device_fingerprint: Optional[Dict[str, Any]] = None
-    additional_context: Optional[Dict[str, Any]] = None
+    model_config = ConfigDict(extra="forbid")
+
+    event_type: Literal["login", "action", "navigation"] = Field(
+        ..., description="Bounded event category"
+    )
 
 class RiskScoreResponse(BaseModel):
     user_id: str
@@ -82,47 +83,31 @@ async def analyze_user_behavior(
         client_ip = request.client.host
         user_agent = request.headers.get("user-agent", "")
 
-        # Generate session ID (in real implementation, this would come from session management)
+        # Generate a correlation/session identifier without retaining raw request context.
         import uuid
         session_id = str(uuid.uuid4())
-
-        # Prepare behavior analysis request
-        behavior_request = BehaviorAnalysisRequest(
+        features = await build_login_features(db, current_user.id, client_ip, user_agent)
+        decision = await evaluate_and_persist(
+            db,
+            correlation_id=f"behavior-{session_id}",
+            context=f"behavior_{analysis_data.event_type}",
+            features=features,
             user_id=current_user.id,
-            session_id=session_id,
-            event_type=analysis_data.event_type,
-            ip_address=analysis_data.ip_address or client_ip,
-            user_agent=analysis_data.user_agent or user_agent,
-            timestamp=datetime.utcnow().isoformat(),
-            geolocation=analysis_data.geolocation,
-            device_fingerprint=analysis_data.device_fingerprint,
-            additional_context=analysis_data.additional_context
+            ai_advisor=ollama_shadow_advisor,
         )
-
-        # Execute behavioral analysis workflow
-        temporal_client = await get_temporal_client()
-        workflow_result = await temporal_client.execute_workflow(
-            BehaviorAnalyticsWorkflow.run,
-            behavior_request,
-            id=f"behavior-analysis-{current_user.id}-{datetime.utcnow().timestamp()}",
-            task_queue="oauth2-task-queue",
-            execution_timeout=timedelta(minutes=2)
-        )
-
-        if not workflow_result.get("success"):
-            raise HTTPException(
-                status_code=500,
-                detail=f"Behavior analysis failed: {workflow_result.get('error', 'Unknown error')}"
-            )
 
         return BehaviorAnalyticsResponse(
-            user_id=workflow_result["user_id"],
-            session_id=workflow_result["session_id"],
-            risk_score=workflow_result["risk_score"],
-            risk_level=workflow_result.get("risk_level", "unknown"),
-            anomalies_detected=workflow_result.get("anomalies_detected", []),
-            behavioral_insights=workflow_result.get("behavioral_insights", {}),
-            alerts_triggered=workflow_result.get("alerts_triggered", [])
+            user_id=current_user.id,
+            session_id=session_id,
+            risk_score=decision.score / 100,
+            risk_level=decision.outcome,
+            anomalies_detected=decision.reason_codes,
+            behavioral_insights={
+                "policy": decision.policy_name,
+                "policy_version": decision.policy_version,
+                "enforced_by": "deterministic_policy",
+            },
+            alerts_triggered=[],
         )
 
     except Exception as e:

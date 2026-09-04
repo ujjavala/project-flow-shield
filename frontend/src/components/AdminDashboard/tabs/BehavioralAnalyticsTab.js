@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { FiUsers, FiBarChart2, FiTarget, FiActivity, FiCpu, FiSmartphone, FiAlertTriangle, FiAlertCircle, FiGlobe, FiClock, FiCheckCircle } from 'react-icons/fi';
+import { Users as FiUsers, BarChart2 as FiBarChart2, Target as FiTarget, Activity as FiActivity, Cpu as FiCpu, Smartphone as FiSmartphone, TriangleAlert as FiAlertTriangle, CircleAlert as FiAlertCircle, Globe as FiGlobe, Clock as FiClock, CheckCircle as FiCheckCircle } from 'lucide-react';
+import { authenticatedFetch } from '../../../services/bffService';
 
 const BehavioralAnalyticsTab = ({ behaviorAnalytics, realtimeEvents }) => {
   const [selectedTimeRange, setSelectedTimeRange] = useState('24h');
@@ -15,16 +16,11 @@ const BehavioralAnalyticsTab = ({ behaviorAnalytics, realtimeEvents }) => {
   const loadBehavioralData = async () => {
     try {
       setLoading(true);
-      const adminToken = localStorage.getItem('admin_token');
-
-      const baseUrl = 'http://localhost:8000';
+      const baseUrl = '';
 
       // Load fraud alerts
-      const alertsResponse = await fetch(`${baseUrl}/behavioral-analytics/admin/fraud-alerts?limit=20`, {
-        headers: {
-          'Authorization': `Bearer ${adminToken}`,
-          'Content-Type': 'application/json'
-        }
+      const alertsResponse = await authenticatedFetch(`${baseUrl}/behavioral-analytics/admin/fraud-alerts?limit=20`, {
+        headers: { 'Content-Type': 'application/json' }
       });
 
       if (alertsResponse.ok) {
@@ -33,11 +29,8 @@ const BehavioralAnalyticsTab = ({ behaviorAnalytics, realtimeEvents }) => {
       }
 
       // Load dashboard data
-      const dashboardResponse = await fetch(`${baseUrl}/behavioral-analytics/admin/behavior-analytics/dashboard`, {
-        headers: {
-          'Authorization': `Bearer ${adminToken}`,
-          'Content-Type': 'application/json'
-        }
+      const dashboardResponse = await authenticatedFetch(`${baseUrl}/behavioral-analytics/admin/behavior-analytics/dashboard`, {
+        headers: { 'Content-Type': 'application/json' }
       });
 
       if (dashboardResponse.ok) {
@@ -54,14 +47,10 @@ const BehavioralAnalyticsTab = ({ behaviorAnalytics, realtimeEvents }) => {
 
   const resolveAlert = async (alertId) => {
     try {
-      const adminToken = localStorage.getItem('admin_token');
-      const baseUrl = 'http://localhost:8000';
-      const response = await fetch(`${baseUrl}/behavioral-analytics/admin/fraud-alerts/${alertId}/resolve`, {
+      const baseUrl = '';
+      const response = await authenticatedFetch(`${baseUrl}/behavioral-analytics/admin/fraud-alerts/${alertId}/resolve`, {
         method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${adminToken}`,
-          'Content-Type': 'application/json'
-        }
+        headers: { 'Content-Type': 'application/json' }
       });
 
       if (response.ok) {

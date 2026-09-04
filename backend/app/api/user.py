@@ -1,20 +1,40 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
+from fastapi.responses import JSONResponse
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, update
 from pydantic import BaseModel
 from typing import Optional
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import logging
+import uuid
 
 from app.database.connection import get_db
+from app.models.auth_security import AuthChallenge
 from app.models.user import User, RefreshToken
-from app.utils.security import verify_password, create_access_token, create_refresh_token, verify_token
-from app.temporal.client import get_temporal_client
-from app.temporal.workflows.user_registration import UserRegistrationWorkflow, EmailVerificationWorkflow
-from app.temporal.types import RegistrationRequest
-from app.temporal.workflows.password_reset import PasswordResetWorkflow, PasswordResetRequest, PasswordResetConfirmationWorkflow, PasswordResetConfirmation
+from app.services.session_service import (
+    InvalidRefreshToken,
+    RefreshTokenReuseDetected,
+    create_session_tokens,
+    revoke_session,
+    rotate_refresh_token,
+)
+from app.utils.security import (
+    verify_password,
+    generate_verification_token,
+    generate_reset_token,
+    hash_one_time_token,
+    hash_password,
+)
 from app.config import settings
+from app.services.email_delivery import email_delivery, EmailDeliveryError
+from app.services.risk_policy_service import (
+    RiskPolicyError,
+    build_login_features,
+    evaluate_and_persist,
+    ollama_shadow_advisor,
+    source_ip_is_blocked,
+)
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -36,6 +56,9 @@ class TokenResponse(BaseModel):
     refresh_token: str
     token_type: str = "bearer"
     expires_in: int
+    session_id: Optional[str] = None
+    risk_decision_id: Optional[str] = None
+    risk_outcome: Optional[str] = None
 
 class PasswordResetRequestModel(BaseModel):
     email: str
@@ -49,6 +72,67 @@ class EmailVerificationModel(BaseModel):
 
 class RefreshTokenModel(BaseModel):
     refresh_token: str
+
+
+async def _evaluate_login_risk(db: AsyncSession, user: User, request: Request):
+    ip_address = request.client.host if request.client else None
+    user_agent = request.headers.get("user-agent")
+    try:
+        features = await build_login_features(db, user.id, ip_address, user_agent)
+        return await evaluate_and_persist(
+            db,
+            correlation_id=f"login-{uuid.uuid4()}",
+            context="password_login",
+            features=features,
+            user_id=user.id,
+            ai_advisor=ollama_shadow_advisor,
+        )
+    except RiskPolicyError as exc:
+        logger.exception("Risk policy evaluation failed for user id %s", user.id)
+        if settings.RISK_POLICY_FAIL_CLOSED or source_ip_is_blocked(ip_address):
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Authentication risk could not be safely evaluated",
+            ) from exc
+        return None
+
+
+def _enforce_login_risk(risk_decision, user: User) -> None:
+    if risk_decision is None:
+        return
+    if risk_decision.outcome == "deny":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Authentication denied by security policy",
+        )
+    if risk_decision.outcome == "review":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Authentication requires security review",
+        )
+    if risk_decision.outcome == "step_up" and not user.totp_enabled:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Additional authentication is required but is not configured",
+        )
+
+
+def _validate_password_login_user(user: User) -> None:
+    if not user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Account is deactivated",
+        )
+    if (hasattr(user, "role") and user.role in ["admin", "moderator"]) or user.is_superuser:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin users must use admin login endpoint: /admin/auth/login",
+        )
+    if not user.is_verified:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Email not verified. Please check your email and verify your account.",
+        )
 
 @router.post("/register", response_model=dict)
 async def register(
@@ -65,52 +149,10 @@ async def register(
                 detail="User with this email already exists"
             )
         
-        # Try Temporal workflow first, fallback to direct registration
-        try:
-            temporal_client = await get_temporal_client()
-            
-            registration_request = RegistrationRequest(
-                email=user_data.email,
-                password=user_data.password,
-                first_name=user_data.first_name,
-                last_name=user_data.last_name,
-                username=user_data.username
-            )
-            
-            workflow_result = await temporal_client.execute_workflow(
-                UserRegistrationWorkflow.run,
-                registration_request,
-                id=f"user-registration-{user_data.email}-{datetime.utcnow().timestamp()}",
-                task_queue="oauth2-task-queue",
-                execution_timeout=timedelta(seconds=30)
-            )
-            
-            if workflow_result["success"]:
-                logger.info(f"User registered via Temporal workflow: {user_data.email}")
-                return {
-                    "success": True,
-                    "user_id": workflow_result["user_id"],
-                    "email": workflow_result["email"],
-                    "message": workflow_result["message"],
-                    "verification_email_sent": workflow_result.get("verification_email_sent", False),
-                    "method": "temporal_workflow"
-                }
-            else:
-                logger.warning(f"Temporal workflow failed: {workflow_result.get('error')}")
-                # Fall through to direct registration
-                
-        except Exception as temporal_error:
-            logger.warning(f"Temporal workflow unavailable: {temporal_error}")
-            # Fall through to direct registration
-        
-        # Direct registration fallback
-        from app.utils.security import hash_password, generate_verification_token
         import uuid
-        
-        # Generate verification token
+
+        # One-time secrets stay in the API process and are persisted only as hashes.
         verification_token = generate_verification_token()
-        
-        # Create user
         new_user = User(
             id=str(uuid.uuid4()),
             email=user_data.email,
@@ -118,7 +160,8 @@ async def register(
             hashed_password=hash_password(user_data.password),
             first_name=user_data.first_name,
             last_name=user_data.last_name,
-            email_verification_token=verification_token,
+            email_verification_token=hash_one_time_token(verification_token),
+            email_verification_expires=datetime.now(timezone.utc) + timedelta(hours=settings.EMAIL_VERIFICATION_EXPIRE_HOURS),
             is_verified=False,
             is_active=True
         )
@@ -127,11 +170,14 @@ async def register(
         await db.commit()
         await db.refresh(new_user)
         
-        logger.info(f"User registered directly: {user_data.email}")
-        
-        # Log verification link for now - skip complex email workflows that are hanging
-        logger.info(f"Verification link: http://localhost:3000/verify-email?token={verification_token}")
-        verification_email_sent = False
+        logger.info("User registered: %s", user_data.email)
+
+        verification_email_sent = True
+        try:
+            await email_delivery.send_verification(new_user.email, verification_token)
+        except (EmailDeliveryError, OSError):
+            verification_email_sent = False
+            logger.exception("Verification email delivery failed for %s", new_user.email)
         
         return {
             "success": True,
@@ -139,7 +185,7 @@ async def register(
             "email": new_user.email,
             "message": "Registration successful. Please check your email to verify your account.",
             "verification_email_sent": verification_email_sent,
-            "method": "direct_registration"
+            "method": "database"
         }
         
     except HTTPException:
@@ -151,58 +197,15 @@ async def register(
             detail="Registration failed"
         )
 
-@router.post("/login", response_model=TokenResponse)
+@router.post("/login", response_model=None)
 async def login(
     user_data: UserLogin,
+    request: Request,
+    response: Response,
     db: AsyncSession = Depends(get_db)
 ):
     """User login"""
     try:
-        # Try Temporal workflow first, fallback to direct method
-        try:
-            temporal_client = await get_temporal_client()
-            
-            from app.temporal.types import LoginRequest
-            from app.temporal.workflows.user_login import UserLoginWorkflow
-            
-            login_request = LoginRequest(
-                email=user_data.email,
-                password=user_data.password
-            )
-            
-            workflow_result = await temporal_client.execute_workflow(
-                UserLoginWorkflow.run,
-                login_request,
-                id=f"user-login-{user_data.email}-{datetime.utcnow().timestamp()}",
-                task_queue="oauth2-task-queue",
-                execution_timeout=timedelta(seconds=30)
-            )
-            
-            if workflow_result["success"]:
-                logger.info(f"User logged in via Temporal workflow: {user_data.email}")
-                return TokenResponse(
-                    access_token=workflow_result["access_token"],
-                    refresh_token=workflow_result["refresh_token"],
-                    token_type=workflow_result.get("token_type", "bearer"),
-                    expires_in=workflow_result["expires_in"]
-                )
-            else:
-                # Workflow failed, get the error message
-                error_detail = workflow_result.get("error", "Login failed")
-                if "Invalid credentials" in error_detail or "deactivated" in error_detail:
-                    raise HTTPException(
-                        status_code=status.HTTP_401_UNAUTHORIZED,
-                        detail=error_detail
-                    )
-                else:
-                    # Fall through to direct method for other errors
-                    logger.warning(f"Temporal workflow failed: {error_detail}")
-                    
-        except Exception as temporal_error:
-            logger.warning(f"Temporal workflow unavailable: {temporal_error}")
-            # Fall through to direct method
-        
-        # Direct login fallback
         result = await db.execute(select(User).where(User.email == user_data.email))
         user = result.scalar_one_or_none()
         
@@ -212,55 +215,66 @@ async def login(
                 detail="Invalid email or password"
             )
         
-        if not user.is_active:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Account is deactivated"
+        _validate_password_login_user(user)
+
+        ip_address = request.client.host if request.client else None
+        user_agent = request.headers.get("user-agent")
+        risk_decision = await _evaluate_login_risk(db, user, request)
+        _enforce_login_risk(risk_decision, user)
+        
+        if user.totp_enabled:
+            import secrets
+
+            challenge_token = secrets.token_urlsafe(32)
+            challenge = AuthChallenge(
+                id=str(uuid.uuid4()),
+                user_id=user.id,
+                purpose="totp_login",
+                challenge=hash_one_time_token(challenge_token),
+                created_at=datetime.now(timezone.utc),
+                expires_at=datetime.now(timezone.utc) + timedelta(
+                    seconds=min(settings.AUTH_CHALLENGE_EXPIRE_SECONDS, 600)
+                ),
+            )
+            db.add(challenge)
+            await db.commit()
+            return JSONResponse(
+                status_code=status.HTTP_202_ACCEPTED,
+                content={
+                    "mfa_required": True,
+                    "challenge_id": challenge.id,
+                    "challenge_token": challenge_token,
+                    "expires_in": min(settings.AUTH_CHALLENGE_EXPIRE_SECONDS, 600),
+                    "risk_decision_id": risk_decision.id if risk_decision else None,
+                    "risk_outcome": risk_decision.outcome if risk_decision else "allow",
+                },
+                headers={"Cache-Control": "no-store", "Pragma": "no-cache"},
             )
 
-        # Check if user has admin role - they should use admin login
-        if hasattr(user, 'role') and user.role in ['admin', 'moderator'] or user.is_superuser:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Admin users must use admin login endpoint: /admin/auth/login"
-            )
-        
-        # Temporarily disable email verification requirement
-        # if not user.is_verified:
-        #     raise HTTPException(
-        #         status_code=status.HTTP_401_UNAUTHORIZED,
-        #         detail="Email not verified. Please check your email and verify your account."
-        #     )
-        
-        # Create tokens
-        access_token = create_access_token({"sub": user.id, "email": user.email})
-        refresh_token = create_refresh_token({"sub": user.id})
-        
-        # Store refresh token
-        refresh_token_record = RefreshToken(
-            user_id=user.id,
-            token=refresh_token,
-            expires_at=datetime.utcnow() + timedelta(days=settings.JWT_REFRESH_TOKEN_EXPIRE_DAYS)
+        user.last_login = datetime.now(timezone.utc)
+        tokens = await create_session_tokens(
+            db,
+            user,
+            authentication_method="password",
+            ip_address=ip_address,
+            user_agent=user_agent,
         )
-        db.add(refresh_token_record)
-        
-        # Update last login
-        user.last_login = datetime.utcnow()
-        
-        await db.commit()
         
         logger.info(f"User logged in directly: {user_data.email}")
         
         return TokenResponse(
-            access_token=access_token,
-            refresh_token=refresh_token,
-            expires_in=settings.JWT_ACCESS_TOKEN_EXPIRE_MINUTES * 60
+            access_token=tokens.access_token,
+            refresh_token=tokens.refresh_token,
+            expires_in=settings.JWT_ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+            session_id=tokens.session_id,
+            risk_decision_id=risk_decision.id if risk_decision else None,
+            risk_outcome=risk_decision.outcome if risk_decision else "allow",
         )
         
     except HTTPException:
         raise
-    except Exception as e:
-        logger.error(f"Login failed: {e}")
+    except Exception:
+        logger.exception("Login failed")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Login failed"
@@ -269,53 +283,27 @@ async def login(
 @router.post("/refresh", response_model=TokenResponse)
 async def refresh_token(
     token_data: RefreshTokenModel,
+    response: Response,
     db: AsyncSession = Depends(get_db)
 ):
-    """Refresh access token"""
+    """Atomically rotate a refresh token; replay revokes its entire family."""
     try:
-        # Verify refresh token
-        payload = verify_token(token_data.refresh_token)
-        if not payload or payload.get("type") != "refresh":
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid refresh token"
-            )
-        
-        user_id = payload.get("sub")
-        
-        # Check if refresh token exists and is not revoked
-        result = await db.execute(
-            select(RefreshToken).where(
-                RefreshToken.token == token_data.refresh_token,
-                RefreshToken.user_id == user_id,
-                RefreshToken.is_revoked == False
-            )
-        )
-        refresh_token_record = result.scalar_one_or_none()
-        
-        if not refresh_token_record or refresh_token_record.expires_at < datetime.utcnow():
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Refresh token expired or revoked"
-            )
-        
-        # Get user
-        user = await db.get(User, user_id)
-        if not user or not user.is_active:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="User not found or inactive"
-            )
-        
-        # Create new access token
-        access_token = create_access_token({"sub": user.id, "email": user.email})
-        
+        tokens = await rotate_refresh_token(db, token_data.refresh_token)
+        response.headers["Cache-Control"] = "no-store"
+        response.headers["Pragma"] = "no-cache"
         return TokenResponse(
-            access_token=access_token,
-            refresh_token=token_data.refresh_token,
-            expires_in=settings.JWT_ACCESS_TOKEN_EXPIRE_MINUTES * 60
+            access_token=tokens.access_token,
+            refresh_token=tokens.refresh_token,
+            expires_in=settings.JWT_ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+            session_id=tokens.session_id,
         )
-        
+    except RefreshTokenReuseDetected as exc:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Refresh token reuse detected; session revoked",
+        ) from exc
+    except InvalidRefreshToken as exc:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid refresh token") from exc
     except HTTPException:
         raise
     except Exception as e:
@@ -332,47 +320,23 @@ async def request_password_reset(
 ):
     """Request password reset"""
     try:
-        # Try Temporal workflow first, fallback to direct method
-        try:
-            temporal_client = await get_temporal_client()
-            
-            reset_request = PasswordResetRequest(email=request_data.email)
-            
-            workflow_result = await temporal_client.execute_workflow(
-                PasswordResetWorkflow.run,
-                reset_request,
-                id=f"password-reset-{request_data.email}-{datetime.utcnow().timestamp()}",
-                task_queue="oauth2-task-queue",
-                execution_timeout=timedelta(seconds=5)
-            )
-            
-            logger.info(f"Password reset requested via Temporal workflow for: {request_data.email}")
-            return {"message": "If the email exists, a password reset link has been sent.", "method": "temporal_workflow"}
-            
-        except Exception as temporal_error:
-            logger.warning(f"Temporal workflow unavailable: {temporal_error}")
-            # Fall through to direct method
-        
-        # Direct password reset fallback
         result = await db.execute(select(User).where(User.email == request_data.email))
         user = result.scalar_one_or_none()
         
-        if user:
-            # Generate password reset token
-            from app.utils.security import generate_verification_token
-            reset_token = generate_verification_token()
-            
-            # Update user with reset token (expires in 1 hour)
-            user.password_reset_token = reset_token
-            user.password_reset_expires = datetime.utcnow() + timedelta(hours=1)
+        if user and user.is_active:
+            reset_token = generate_reset_token()
+            user.password_reset_token = hash_one_time_token(reset_token)
+            user.password_reset_expires = datetime.now(timezone.utc) + timedelta(hours=settings.PASSWORD_RESET_EXPIRE_HOURS)
             
             await db.commit()
-            
-            logger.info(f"Password reset requested directly for: {request_data.email}")
-            logger.info(f"Password reset link: http://localhost:3000/reset-password?token={reset_token}")
+
+            try:
+                await email_delivery.send_password_reset(user.email, reset_token)
+            except (EmailDeliveryError, OSError):
+                logger.exception("Password reset email delivery failed for %s", user.email)
         
         # Always return success to prevent email enumeration
-        return {"message": "If the email exists, a password reset link has been sent.", "method": "direct_method"}
+        return {"message": "If the email exists, a password reset link has been sent."}
         
     except Exception as e:
         logger.error(f"Password reset request failed: {e}")
@@ -385,63 +349,34 @@ async def confirm_password_reset(
 ):
     """Confirm password reset"""
     try:
-        # Try Temporal workflow first, fallback to direct method
-        try:
-            temporal_client = await get_temporal_client()
-            
-            reset_confirmation = PasswordResetConfirmation(
-                reset_token=reset_data.token,
-                new_password=reset_data.new_password
-            )
-            
-            workflow_result = await temporal_client.execute_workflow(
-                PasswordResetConfirmationWorkflow.run,
-                reset_confirmation,
-                id=f"password-reset-confirm-{reset_data.token}-{datetime.utcnow().timestamp()}",
-                task_queue="oauth2-task-queue",
-                execution_timeout=timedelta(seconds=5)
-            )
-            
-            if workflow_result["success"]:
-                logger.info("Password reset completed via Temporal workflow")
-                return {"message": workflow_result["message"], "method": "temporal_workflow"}
-            else:
-                logger.warning(f"Temporal password reset failed: {workflow_result.get('error')}")
-                # Fall through to direct method
-                
-        except Exception as temporal_error:
-            logger.warning(f"Temporal workflow unavailable: {temporal_error}")
-            # Fall through to direct method
-        
-        # Direct password reset confirmation fallback
+        now = datetime.now(timezone.utc)
+        token_digest = hash_one_time_token(reset_data.token)
         result = await db.execute(
-            select(User).where(User.password_reset_token == reset_data.token)
+            update(User)
+            .where(
+                User.password_reset_token == token_digest,
+                User.password_reset_expires.is_not(None),
+                User.password_reset_expires >= now,
+                User.is_active.is_(True),
+            )
+            .values(
+                hashed_password=hash_password(reset_data.new_password),
+                password_reset_token=None,
+                password_reset_expires=None,
+            )
+            .returning(User.id)
         )
-        user = result.scalar_one_or_none()
-        
-        if not user:
+        user_id = result.scalar_one_or_none()
+        if user_id is None:
+            await db.rollback()
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Invalid or expired reset token"
             )
-        
-        # Check if token has expired
-        if user.password_reset_expires and user.password_reset_expires < datetime.utcnow():
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Password reset token has expired"
-            )
-        
-        # Update password and clear reset token
-        from app.utils.security import hash_password
-        user.hashed_password = hash_password(reset_data.new_password)
-        user.password_reset_token = None
-        user.password_reset_expires = None
-        
         await db.commit()
-        
-        logger.info(f"Password reset completed directly for user: {user.email}")
-        return {"message": "Password has been reset successfully! You can now login with your new password.", "method": "direct_method"}
+
+        logger.info("Password reset completed for user id %s", user_id)
+        return {"message": "Password has been reset successfully. You can now log in with your new password."}
         
     except HTTPException:
         raise
@@ -459,58 +394,35 @@ async def verify_email(
 ):
     """Verify email address"""
     try:
-        # Try Temporal workflow first, fallback to direct verification
-        try:
-            temporal_client = await get_temporal_client()
-            
-            workflow_result = await temporal_client.execute_workflow(
-                EmailVerificationWorkflow.run,
-                verification_data.token,
-                id=f"email-verification-{verification_data.token}-{datetime.utcnow().timestamp()}",
-                task_queue="oauth2-task-queue",
-                execution_timeout=timedelta(seconds=5)
-            )
-            
-            if workflow_result["success"]:
-                logger.info(f"Email verified via Temporal workflow")
-                return {
-                    "message": workflow_result["message"], 
-                    "method": "temporal_workflow"
-                }
-            else:
-                logger.warning(f"Temporal verification failed: {workflow_result.get('error')}")
-                # Fall through to direct verification
-                
-        except Exception as temporal_error:
-            logger.warning(f"Temporal workflow unavailable: {temporal_error}")
-            # Fall through to direct verification
-        
-        # Direct verification fallback
+        now = datetime.now(timezone.utc)
+        token_digest = hash_one_time_token(verification_data.token)
         result = await db.execute(
-            select(User).where(User.email_verification_token == verification_data.token)
+            update(User)
+            .where(
+                User.email_verification_token == token_digest,
+                User.email_verification_expires.is_not(None),
+                User.email_verification_expires >= now,
+                User.is_active.is_(True),
+            )
+            .values(
+                is_verified=True,
+                email_verification_token=None,
+                email_verification_expires=None,
+            )
+            .returning(User.id)
         )
-        user = result.scalar_one_or_none()
-        
-        if not user:
+        user_id = result.scalar_one_or_none()
+        if user_id is None:
+            await db.rollback()
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Invalid or expired verification token"
             )
-        
-        if user.is_verified:
-            return {"message": "Email already verified", "method": "direct_verification"}
-        
-        # Update user verification status
-        user.is_verified = True
-        user.email_verification_token = None
-        user.email_verification_expires = None
-        
         await db.commit()
-        
-        logger.info(f"Email verified directly for user: {user.email}")
+
+        logger.info("Email verified for user id %s", user_id)
         return {
-            "message": "Email verified successfully! You can now login.", 
-            "method": "direct_verification"
+            "message": "Email verified successfully. You can now log in."
         }
         
     except HTTPException:
@@ -522,6 +434,36 @@ async def verify_email(
             detail="Email verification failed"
         )
 
+
+@router.post("/resend-verification")
+async def resend_verification(
+    request_data: PasswordResetRequestModel,
+    db: AsyncSession = Depends(get_db),
+):
+    """Rotate and redeliver a verification token without revealing account state."""
+    generic_response = {"message": "If the account exists and is unverified, a verification email has been sent."}
+    try:
+        result = await db.execute(select(User).where(User.email == request_data.email))
+        user = result.scalar_one_or_none()
+        if user is None or not user.is_active or user.is_verified:
+            return generic_response
+
+        verification_token = generate_verification_token()
+        user.email_verification_token = hash_one_time_token(verification_token)
+        user.email_verification_expires = datetime.now(timezone.utc) + timedelta(
+            hours=settings.EMAIL_VERIFICATION_EXPIRE_HOURS
+        )
+        await db.commit()
+
+        try:
+            await email_delivery.send_verification(user.email, verification_token)
+        except (EmailDeliveryError, OSError):
+            logger.exception("Verification email redelivery failed for %s", user.email)
+        return generic_response
+    except Exception:
+        logger.exception("Verification email request failed")
+        return generic_response
+
 @router.post("/logout")
 async def logout(
     token_data: RefreshTokenModel,
@@ -529,15 +471,14 @@ async def logout(
 ):
     """User logout - revoke refresh token"""
     try:
-        # Revoke refresh token
+        token_digest = hash_one_time_token(token_data.refresh_token)
         result = await db.execute(
-            select(RefreshToken).where(RefreshToken.token == token_data.refresh_token)
+            select(RefreshToken).where(RefreshToken.token_hash == token_digest)
         )
         refresh_token_record = result.scalar_one_or_none()
         
         if refresh_token_record:
-            refresh_token_record.is_revoked = True
-            await db.commit()
+            await revoke_session(db, refresh_token_record.session_id, refresh_token_record.user_id)
         
         return {"message": "Logged out successfully"}
         

@@ -144,7 +144,7 @@ class UserActivities:
                 }
                 
         except Exception as e:
-            logger.error(f"Failed to verify email with token {verification_token}: {e}")
+            logger.error("Failed to verify email: %s", e)
             raise
     
     @activity.defn(name="set_password_reset_token")
@@ -211,5 +211,5 @@ class UserActivities:
                 }
                 
         except Exception as e:
-            logger.error(f"Failed to reset password with token {reset_token}: {e}")
+            logger.error("Failed to reset password: %s", e)
             raise

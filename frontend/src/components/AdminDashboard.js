@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { FiAlertTriangle } from 'react-icons/fi';
+import { TriangleAlert as FiAlertTriangle } from 'lucide-react';
 import './AdminDashboard.css';
 import OverviewTab from './AdminDashboard/tabs/OverviewTab';
 import FraudTab from './AdminDashboard/tabs/FraudTab';
@@ -13,6 +13,8 @@ import BehavioralAnalyticsTab from './AdminDashboard/tabs/BehavioralAnalyticsTab
 import PredictiveAttackTab from './AdminDashboard/tabs/PredictiveAttackTab';
 import FlowShieldLogo from './common/FlowShieldLogo';
 import './common/FlowShieldLogo.css';
+import { authenticatedFetch } from '../services/bffService';
+import { useAuth } from '../context/AuthContext';
 
 const AdminDashboard = () => {
   const [dashboardData, setDashboardData] = useState(null);
@@ -33,6 +35,7 @@ const AdminDashboard = () => {
   const [autoRefresh, setAutoRefresh] = useState(true);
   const [lastUpdated, setLastUpdated] = useState(new Date());
   const navigate = useNavigate();
+  const { logout } = useAuth();
 
   useEffect(() => {
     loadAllData();
@@ -46,20 +49,8 @@ const AdminDashboard = () => {
     try {
       setLoading(true);
 
-      // Get admin authentication token
-      const adminToken = localStorage.getItem('admin_token');
-      const adminRole = localStorage.getItem('admin_role');
-
-      if (!adminToken) {
-        setError('Admin authentication required');
-        return;
-      }
-
-      const baseUrl = 'http://localhost:8000';
-      const headers = {
-        'Authorization': `Bearer ${adminToken}`,
-        'Content-Type': 'application/json'
-      };
+      const baseUrl = '';
+      const headers = { 'Content-Type': 'application/json' };
       
       const [
         healthResponse,
@@ -73,16 +64,16 @@ const AdminDashboard = () => {
         behaviorAnalyticsResponse,
         realtimeEventsResponse
       ] = await Promise.allSettled([
-        fetch(`${baseUrl}/admin/health`, { headers }),
-        fetch(`${baseUrl}/admin/users`, { headers }),
-        fetch(`${baseUrl}/admin/services`, { headers }),
-        fetch(`${baseUrl}/admin/ai-status`, { headers }),
-        fetch(`${baseUrl}/admin/temporal-status`, { headers }),
-        fetch(`${baseUrl}/admin/fraud-analytics`, { headers }),
-        fetch(`${baseUrl}/admin/mfa-analytics`, { headers }),
-        fetch(`${baseUrl}/admin/security-overview`, { headers }),
-        fetch(`${baseUrl}/behavioral-analytics/admin/behavior-analytics/dashboard`, { headers }),
-        fetch(`${baseUrl}/admin/fraud-events/realtime?limit=20`, { headers })
+        authenticatedFetch(`${baseUrl}/admin/health`, { headers }),
+        authenticatedFetch(`${baseUrl}/admin/users`, { headers }),
+        authenticatedFetch(`${baseUrl}/admin/services`, { headers }),
+        authenticatedFetch(`${baseUrl}/admin/ai-status`, { headers }),
+        authenticatedFetch(`${baseUrl}/admin/temporal-status`, { headers }),
+        authenticatedFetch(`${baseUrl}/admin/fraud-analytics`, { headers }),
+        authenticatedFetch(`${baseUrl}/admin/mfa-analytics`, { headers }),
+        authenticatedFetch(`${baseUrl}/admin/security-overview`, { headers }),
+        authenticatedFetch(`${baseUrl}/behavioral-analytics/admin/behavior-analytics/dashboard`, { headers }),
+        authenticatedFetch(`${baseUrl}/admin/fraud-events/realtime?limit=20`, { headers })
       ]);
 
       if (healthResponse.status === 'fulfilled') {
@@ -139,28 +130,12 @@ const AdminDashboard = () => {
   const handleAdminLogout = async () => {
     setLogoutLoading(true);
     try {
-      // Call admin logout endpoint
-      const adminToken = localStorage.getItem('admin_token');
-      if (adminToken) {
-        await fetch('http://localhost:8000/admin/auth/logout', {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${adminToken}`,
-            'Content-Type': 'application/json'
-          }
-        });
-      }
+      await logout();
     } catch (error) {
       console.error('Admin logout error:', error);
     } finally {
       // Small delay to show loading state
       setTimeout(() => {
-        // Clear admin tokens regardless of API call success
-        localStorage.removeItem('admin_token');
-        localStorage.removeItem('admin_refresh_token');
-        localStorage.removeItem('admin_role');
-        localStorage.removeItem('admin_permissions');
-
         toast.success('Admin session ended successfully');
         navigate('/admin/login');
       }, 800);
@@ -169,7 +144,7 @@ const AdminDashboard = () => {
 
   const performAction = async (action, target, parameters = {}) => {
     try {
-      const response = await fetch('http://localhost:8000/admin/actions', {
+      const response = await authenticatedFetch('/admin/actions', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

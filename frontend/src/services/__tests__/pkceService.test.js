@@ -11,21 +11,22 @@ import {
   PKCEAuthFlow,
   parseAuthorizationResponse
 } from '../pkceService';
+import { vi } from 'vitest';
 
 // Mock Web Crypto API for testing
 const mockCrypto = {
   subtle: {
-    digest: jest.fn()
+    digest: vi.fn()
   },
-  getRandomValues: jest.fn()
+  getRandomValues: vi.fn()
 };
 
 // Mock fetch for token exchange tests
-global.fetch = jest.fn();
+global.fetch = vi.fn();
 
 describe('PKCE Service', () => {
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
     
     // Mock crypto.getRandomValues
     mockCrypto.getRandomValues.mockImplementation((array) => {
@@ -48,12 +49,14 @@ describe('PKCE Service', () => {
     });
     
     // Mock TextEncoder for Node.js environment
-    global.TextEncoder = jest.fn().mockImplementation(() => ({
-      encode: jest.fn().mockReturnValue(new Uint8Array([116, 101, 115, 116]))
-    }));
+    global.TextEncoder = class MockTextEncoder {
+      encode() {
+        return new Uint8Array([116, 101, 115, 116]);
+      }
+    };
     
     // Mock btoa - need to make it dynamic for different values
-    global.btoa = jest.fn().mockImplementation((str) => {
+    global.btoa = vi.fn().mockImplementation((str) => {
       // Create a proper base64-like string for testing
       const hash = Math.abs(str.split('').reduce((a, b) => {
         a = ((a << 5) - a) + b.charCodeAt(0);
@@ -76,7 +79,7 @@ describe('PKCE Service', () => {
     test('generates different verifiers on multiple calls', () => {
       // Reset mock to return different values
       let callCount = 0;
-      global.btoa = jest.fn().mockImplementation((str) => {
+      global.btoa = vi.fn().mockImplementation((str) => {
         callCount++;
         return `mockBase64String${callCount}`;
       });
@@ -102,7 +105,7 @@ describe('PKCE Service', () => {
     test('throws error when Web Crypto API unavailable', async () => {
       // Create new crypto object without subtle property
       const cryptoWithoutSubtle = {
-        getRandomValues: jest.fn()
+        getRandomValues: vi.fn()
       };
       
       Object.defineProperty(global, 'crypto', {
@@ -242,12 +245,12 @@ describe('PKCE Service', () => {
       // Mock localStorage
       Object.defineProperty(global, 'localStorage', {
         value: {
-          getItem: jest.fn((key) => mockStorage.get(key) || null),
-          setItem: jest.fn((key, value) => mockStorage.set(key, value)),
-          removeItem: jest.fn((key) => mockStorage.delete(key)),
-          clear: jest.fn(() => mockStorage.clear()),
+          getItem: vi.fn((key) => mockStorage.get(key) || null),
+          setItem: vi.fn((key, value) => mockStorage.set(key, value)),
+          removeItem: vi.fn((key) => mockStorage.delete(key)),
+          clear: vi.fn(() => mockStorage.clear()),
           get length() { return mockStorage.size; },
-          key: jest.fn((index) => Array.from(mockStorage.keys())[index] || null)
+          key: vi.fn((index) => Array.from(mockStorage.keys())[index] || null)
         },
         writable: true,
         configurable: true
@@ -255,7 +258,8 @@ describe('PKCE Service', () => {
       
       authFlow = new PKCEAuthFlow({
         clientId: 'test-client',
-        redirectUri: 'http://localhost:3000/callback'
+        redirectUri: 'http://localhost:3000/callback',
+        storage: global.localStorage
       });
     });
 

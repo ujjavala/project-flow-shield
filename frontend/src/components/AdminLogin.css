@@ -232,17 +232,21 @@
   border-color: #fbbf24;
 }
 
-.checkbox-label input[type="checkbox"]:checked + .checkbox-custom::after {
-  content: '✓';
+.checkbox-custom svg {
   position: absolute;
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
   color: #000;
-  font-weight: 800;
-  font-size: 11px;
-  line-height: 1;
-  display: block;
+  width: 14px;
+  height: 14px;
+  stroke-width: 3;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.checkbox-label input[type="checkbox"]:checked + .checkbox-custom svg {
+  opacity: 1;
 }
 
 .checkbox-text {

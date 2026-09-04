@@ -1,0 +1,277 @@
+name: Secure CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  schedule:
+    - cron: "23 3 * * 1"
+  workflow_dispatch:
+    inputs:
+      full_backend:
+        description: Run the full backend suite, including Temporal tests
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name != 'schedule' }}
+
+env:
+  PYTHON_VERSION: "3.11"
+  NODE_VERSION: "24"
+
+jobs:
+  backend-focused:
+    name: Backend focused tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+      - run: pip install -r requirements-dev.txt
+      - name: Security and identity focused suite
+        run: >-
+          pytest
+          tests/services/test_email_delivery.py
+          tests/services/test_bff_session_service.py
+          tests/services/test_principal_service.py
+          tests/services/test_oidc_service.py
+          tests/services/test_pkce_service.py
+          tests/services/test_rate_limit_service.py
+          tests/services/test_risk_policy_service.py
+          tests/services/test_privileged_access_advisory_service.py
+          tests/services/test_ai_prompt_privacy.py
+          tests/services/test_security_lab_service.py
+          tests/services/test_session_service.py
+          tests/services/test_strong_auth_service.py
+          tests/api/test_bff_api.py
+          tests/api/test_iam_security.py
+          tests/api/test_oidc_api.py
+          tests/api/test_pkce_api.py
+          tests/api/test_recovery_security.py
+          tests/api/test_risk_policy_login.py
+          tests/api/test_security_lab_api.py
+          tests/api/test_sensitive_error_responses.py
+          tests/temporal/test_privileged_access_workflow.py
+          tests/temporal/test_worker_registration.py
+          tests/evals/test_privileged_access_advisor_evaluation.py
+          tests/evals/test_risk_policy_evaluation.py
+          tests/test_bff_session_middleware.py
+          tests/test_rate_limiting_middleware.py
+          tests/test_safe_logging.py
+          tests/test_utils_security.py
+          --cov=app.services.principal_service
+          --cov=app.services.bff_session_service
+          --cov=app.services.risk_policy_service
+          --cov=app.services.privileged_access_advisory_service
+          --cov-fail-under=74
+          --cov-report=xml:focused-coverage.xml
+          --junitxml=focused-results.xml
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: backend-focused-results
+          path: |
+            backend/focused-results.xml
+            backend/focused-coverage.xml
+          if-no-files-found: error
+
+  backend-full:
+    name: Backend full suite
+    if: github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.full_backend)
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+      - run: pip install -r requirements.txt
+      - run: pytest tests --junitxml=full-results.xml
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: backend-full-results
+          path: backend/full-results.xml
+          if-no-files-found: error
+
+  frontend:
+    name: Frontend tests and build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - run: npm run test:coverage -- --reporter=dot
+      - run: npm run build
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: flowshield-frontend
+          path: |
+            frontend/dist
+            frontend/coverage
+          if-no-files-found: error
+
+  dependency-security:
+    name: Dependency and repository security
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Enforce repository and workflow policy
+        run: python3 scripts/check_repository_safety.py
+      - name: Scan the complete Git history for secrets
+        run: >-
+          docker run --rm
+          --volume "$PWD:/repo:ro"
+          ghcr.io/trufflesecurity/trufflehog@sha256:562bc231afa9de3d04de44cfe624252b08207de1fc3cebc5e7ed92bed7f279e4
+          git file:///repo
+          --fail
+          --no-update
+          --only-verified
+          --github-actions
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Python dependency audit
+        run: |
+          python -m pip install pip-audit==2.10.1 cyclonedx-bom==7.3.1 pip-licenses==5.5.5
+          python -m pip install -r backend/requirements.txt
+          pip-audit -r backend/requirements.txt --format json --output python-audit.json
+      - name: Frontend dependency audit
+        working-directory: frontend
+        run: |
+          npm ci
+          npm audit --audit-level=high --json > ../npm-audit.json
+      - name: Generate CycloneDX SBOMs
+        run: |
+          cyclonedx-py requirements backend/requirements.txt --output-file backend-sbom.json
+          cd frontend
+          npm sbom --omit=dev --sbom-format=cyclonedx > ../frontend-sbom.json
+      - name: Generate dependency license reports
+        run: |
+          pip-licenses --format=json --output-file=python-licenses.json
+          jq '[.packages | to_entries[] | select(.key != "" and .value.license != null) | {path: .key, version: .value.version, license: .value.license}]' \
+            frontend/package-lock.json > frontend-licenses.json
+      - name: Generate runtime EOL report
+        continue-on-error: true
+        run: |
+          : > runtime-eol.jsonl
+          for target in python:3.11 nodejs:24 postgresql:15 redis:7 nginx:1.27; do
+            runtime="${target%%:*}"
+            cycle="${target#*:}"
+            curl --fail --silent --show-error --retry 3 \
+              "https://endoflife.date/api/${runtime}.json" \
+              | jq -c --arg runtime "$runtime" --arg cycle "$cycle" \
+                '{runtime: $runtime, configuredCycle: $cycle, release: (map(select(.cycle == $cycle)) | first // null)}' \
+              >> runtime-eol.jsonl
+          done
+      - name: Filesystem vulnerability, misconfiguration, and secret scan
+        uses: aquasecurity/trivy-action@a9c7b0f06e461e9d4b4d1711f154ee024b8d7ab8 # v0.36.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          scanners: vuln,misconfig,secret
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+          format: table
+          output: trivy-report.txt
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: security-and-sboms
+          path: |
+            python-audit.json
+            npm-audit.json
+            *-sbom.json
+            *-licenses.json
+            runtime-eol.jsonl
+            trivy-report.txt
+          if-no-files-found: warn
+
+  dockerfile-lint:
+    name: Dockerfile policy
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Lint every Dockerfile
+        uses: hadolint/hadolint-action@06be81baf89a55ffd0e24b8f04a4185738dd3387 # v3.5.0
+        with:
+          dockerfile: Dockerfile
+          recursive: true
+          failure-threshold: error
+
+  compose-and-images:
+    name: Compose validation and image builds
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Validate every Compose entry point
+        run: |
+          docker compose config --quiet
+          docker compose --profile ai config --quiet
+          docker compose -f docker-compose.complete.yml config --quiet
+          docker compose -f docker-compose.ai.yml config --quiet
+      - name: Build immutable application images
+        run: docker compose build backend frontend worker identity-worker
+      - name: Scan backend image
+        uses: aquasecurity/trivy-action@a9c7b0f06e461e9d4b4d1711f154ee024b8d7ab8 # v0.36.0
+        with:
+          image-ref: flowshield-local-backend
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+      - name: Scan frontend image
+        uses: aquasecurity/trivy-action@a9c7b0f06e461e9d4b4d1711f154ee024b8d7ab8 # v0.36.0
+        with:
+          image-ref: flowshield-local-frontend
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"

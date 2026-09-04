@@ -1,5 +1,5 @@
 import React from 'react';
-import { FiAlertTriangle, FiAlertCircle, FiShield, FiActivity } from 'react-icons/fi';
+import { TriangleAlert as FiAlertTriangle, Activity as FiActivity } from 'lucide-react';
 
 const FraudTab = ({ fraudAnalytics, realtimeEvents }) => (
   <div className="fraud-tab">

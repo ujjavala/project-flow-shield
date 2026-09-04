@@ -1,5 +1,5 @@
 import React from 'react';
-import { FiMonitor, FiTool, FiActivity } from 'react-icons/fi';
+import { Monitor as FiMonitor, Wrench as FiTool, Activity as FiActivity } from 'lucide-react';
 
 const ServicesTab = ({ serviceStatus, temporalStatus }) => (
   <div className="services-tab">

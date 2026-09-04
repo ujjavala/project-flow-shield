@@ -4,7 +4,7 @@ OAuth 2.1 standard implementation for enhanced security
 """
 from datetime import datetime, timedelta
 from typing import Optional, Dict, Any
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 import secrets
 import hashlib
 import base64
@@ -15,10 +15,17 @@ class PKCERequest(BaseModel):
     client_id: str
     redirect_uri: str
     scope: Optional[str] = "read write"
-    state: Optional[str] = None
-    code_challenge: str = Field(..., min_length=43, max_length=128)
-    code_challenge_method: str = Field(default="S256", pattern="^(S256|plain)$")
+    state: str = Field(..., min_length=16, max_length=512)
+    nonce: Optional[str] = Field(default=None, min_length=1, max_length=512, pattern=r"^[^\x00-\x1f\x7f]+$")
+    code_challenge: str = Field(..., pattern=r"^[A-Za-z0-9_-]{43}$")
+    code_challenge_method: str = Field(default="S256", pattern="^S256$")
     response_type: str = Field(default="code", pattern="^code$")
+
+    @model_validator(mode="after")
+    def validate_oidc_parameters(self):
+        if self.nonce is not None and "openid" not in (self.scope or "").split():
+            raise ValueError("nonce requires the openid scope")
+        return self
 
 
 class PKCETokenRequest(BaseModel):
@@ -27,7 +34,13 @@ class PKCETokenRequest(BaseModel):
     code: str
     redirect_uri: str
     client_id: str
-    code_verifier: str = Field(..., min_length=43, max_length=128)
+    client_secret: Optional[str] = None
+    code_verifier: str = Field(
+        ...,
+        min_length=43,
+        max_length=128,
+        pattern=r"^[A-Za-z0-9._~-]+$"
+    )
 
 
 class PKCEAuthorizationCode(BaseModel):
@@ -36,8 +49,10 @@ class PKCEAuthorizationCode(BaseModel):
     client_id: str
     user_id: str
     redirect_uri: str
-    scope: Optional[str]
-    state: Optional[str]
+    scope: Optional[str] = None
+    state: Optional[str] = None
+    nonce: Optional[str] = None
+    auth_time: Optional[datetime] = None
     code_challenge: str
     code_challenge_method: str
     expires_at: datetime
@@ -62,14 +77,11 @@ class PKCEUtils:
         Generate code challenge from verifier
         RFC 7636 Section 4.2: S256 method (SHA256)
         """
-        if method == "S256":
-            digest = hashlib.sha256(code_verifier.encode('utf-8')).digest()
-            return base64.urlsafe_b64encode(digest).decode('utf-8').rstrip('=')
-        elif method == "plain":
-            # Plain method not recommended for production
-            return code_verifier
-        else:
+        if method != "S256":
             raise ValueError(f"Unsupported code challenge method: {method}")
+
+        digest = hashlib.sha256(code_verifier.encode('ascii')).digest()
+        return base64.urlsafe_b64encode(digest).decode('ascii').rstrip('=')
     
     @staticmethod
     def verify_code_challenge(code_verifier: str, code_challenge: str, method: str = "S256") -> bool:
@@ -82,6 +94,20 @@ class PKCEUtils:
             return secrets.compare_digest(expected_challenge, code_challenge)
         except Exception:
             return False
+
+    @staticmethod
+    def authorization_code_is_redeemable(
+        code_verifier: str,
+        code_challenge: str,
+        method: str,
+        is_used: bool,
+    ) -> bool:
+        """Return whether a one-time S256 grant may be redeemed."""
+        return (
+            not is_used
+            and method == "S256"
+            and PKCEUtils.verify_code_challenge(code_verifier, code_challenge, method)
+        )
     
     @staticmethod
     def generate_authorization_code() -> str:
@@ -137,6 +163,7 @@ class PKCETokenResponse(BaseModel):
     token_type: str = "Bearer"
     expires_in: int
     refresh_token: Optional[str] = None
+    id_token: Optional[str] = None
     scope: Optional[str] = None
 
 

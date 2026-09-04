@@ -15,7 +15,7 @@ import httpx
 
 from app.database.connection import get_db
 from app.models.user import User, RefreshToken
-from app.utils.security import verify_token
+from app.services.principal_service import resolve_access_principal
 
 logger = logging.getLogger(__name__)
 security = HTTPBearer()
@@ -71,41 +71,12 @@ async def get_current_user(
 ) -> User:
     """Get current authenticated user"""
 
-    if not credentials:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Authentication required"
-        )
-
     try:
-        # Verify JWT token
-        payload = verify_token(credentials.credentials)
-        if not payload:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid or expired token"
-            )
-
-        user_id = payload.get("sub")
-        if not user_id:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid token payload"
-            )
-
-        # Get user from database
-        user = await db.get(User, user_id)
-        if not user:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="User not found"
-            )
-
-        if not user.is_active:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Account is inactive"
-            )
+        principal = await resolve_access_principal(
+            credentials.credentials if credentials else None,
+            db,
+        )
+        user = principal.user
 
         # Check if user has admin role - deny access to admin users
         # (they should use admin dashboard instead)
@@ -443,7 +414,7 @@ async def revoke_session(
             select(RefreshToken).where(
                 and_(
                     RefreshToken.user_id == current_user.id,
-                    RefreshToken.token.contains(session_id[:8])  # Match first 8 chars
+                    RefreshToken.session_id == session_id,
                 )
             )
         )

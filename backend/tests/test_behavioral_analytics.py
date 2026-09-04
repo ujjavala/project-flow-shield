@@ -111,7 +111,7 @@ class TestBehavioralActivities:
 
     @pytest.mark.asyncio
     async def test_calculate_risk_score_with_ai(self, behavioral_activities, sample_analysis_data):
-        """Test risk score calculation with AI analysis"""
+        """Test AI evidence is combined with, rather than replacing, rule factors."""
         # Mock AI analysis to return a risk score
         mock_ai_result = {
             "success": True,
@@ -133,10 +133,10 @@ class TestBehavioralActivities:
                 )
 
                 assert result["success"] is True
-                assert result["risk_score"] == 0.7  # Should use AI score
+                assert result["risk_score"] == 1.0
                 assert result["ai_enhanced"] is True
                 assert result["ai_analysis"] == mock_ai_result
-                assert result["risk_level"] == "high"
+                assert result["risk_level"] == "critical"
 
     @pytest.mark.asyncio
     async def test_calculate_risk_score_fallback(self, behavioral_activities, sample_analysis_data):
@@ -259,7 +259,9 @@ class TestBehavioralActivities:
         }
 
         with patch('httpx.AsyncClient') as mock_client:
-            mock_client.return_value.__aenter__.return_value.post.return_value = mock_response
+            mock_client.return_value.__aenter__.return_value.post = AsyncMock(
+                return_value=mock_response
+            )
 
             result = await behavioral_activities._analyze_with_ai("test-user-123", analysis_data)
 
@@ -280,7 +282,9 @@ class TestBehavioralActivities:
 
         # Mock Ollama connection error
         with patch('httpx.AsyncClient') as mock_client:
-            mock_client.return_value.__aenter__.return_value.post.side_effect = Exception("Connection failed")
+            mock_client.return_value.__aenter__.return_value.post = AsyncMock(
+                side_effect=Exception("Connection failed")
+            )
 
             result = await behavioral_activities._analyze_with_ai("test-user-123", analysis_data)
 

@@ -1,9 +1,10 @@
 import { render, screen } from '@testing-library/react';
+import { BarChart2, Lock } from 'lucide-react';
 import MetricCard from '../MetricCard';
 
 describe('MetricCard Component', () => {
   const defaultProps = {
-    icon: '📊',
+    icon: <BarChart2 aria-label="User metrics" />,
     title: 'Total Users',
     value: '1,234',
     change: { text: '+12%', type: 'positive' },
@@ -12,7 +13,7 @@ describe('MetricCard Component', () => {
   test('renders metric card with basic props', () => {
     render(<MetricCard {...defaultProps} />);
     
-    expect(screen.getByText('📊')).toBeInTheDocument();
+    expect(screen.getByLabelText('User metrics')).toBeInTheDocument();
     expect(screen.getByText('Total Users')).toBeInTheDocument();
     expect(screen.getByText('1,234')).toBeInTheDocument();
     expect(screen.getByText('+12%')).toBeInTheDocument();
@@ -73,13 +74,13 @@ describe('MetricCard Component', () => {
   test('renders with different icon types', () => {
     const props = {
       ...defaultProps,
-      icon: '🔒',
+      icon: <Lock aria-label="Security events" />,
       title: 'Security Events',
     };
     
     render(<MetricCard {...props} />);
     
-    expect(screen.getByText('🔒')).toBeInTheDocument();
+    expect(screen.getByLabelText('Security events')).toBeInTheDocument();
     expect(screen.getByText('Security Events')).toBeInTheDocument();
   });
 

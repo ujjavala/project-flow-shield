@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
-import { FiEye, FiEyeOff, FiSettings } from 'react-icons/fi';
+import { Eye as FiEye, EyeOff as FiEyeOff, Settings as FiSettings } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 const Login = () => {
   const [loading, setLoading] = useState(false);

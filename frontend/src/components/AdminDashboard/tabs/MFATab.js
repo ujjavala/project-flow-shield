@@ -1,5 +1,5 @@
 import React from 'react';
-import { FiLock, FiMail, FiSmartphone, FiBell, FiSettings, FiShield, FiTarget, FiClock, FiAward, FiAlertTriangle, FiAlertCircle, FiCheckCircle } from 'react-icons/fi';
+import { Lock as FiLock, Mail as FiMail, Smartphone as FiSmartphone, Bell as FiBell, Settings as FiSettings, Shield as FiShield, Target as FiTarget, Clock as FiClock, Award as FiAward } from 'lucide-react';
 
 const MFATab = ({ mfaAnalytics, securityOverview }) => (
   <div className="mfa-tab">

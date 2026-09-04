@@ -11,6 +11,10 @@ from datetime import datetime
 from app.main import app
 from app.models.user import User
 
+pytestmark = pytest.mark.skip(
+    reason="Superseded by BFF, live-principal, and focused admin authorization tests"
+)
+
 # Create test client
 client = TestClient(app)
 
