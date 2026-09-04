@@ -197,7 +197,7 @@ jobs:
         continue-on-error: true
         run: |
           : > runtime-eol.jsonl
-          for target in python:3.11 nodejs:24 postgresql:15 redis:7 nginx:1.27; do
+          for target in python:3.11 nodejs:24 postgresql:15 redis:7 nginx:1.29; do
             runtime="${target%%:*}"
             cycle="${target#*:}"
             curl --fail --silent --show-error --retry 3 \
